@@ -1,4 +1,4 @@
-FROM nvidia/cuda:11.0.3-cudnn8-runtime-ubuntu20.04
+FROM nvidia/cuda:11.1.1-cudnn8-runtime-ubuntu20.04
 
 ENV TZ=Europe/Warsaw
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
@@ -12,6 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpng-dev \
     python3-pip \
     && rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install torch==1.9.0+cu111 torchvision==0.10.0+cu111 torchaudio==0.9.0 -f https://download.pytorch.org/whl/torch_stable.html --no-cache
 
 # Let's pretend we've installed CARLA via easy_install
 # It's client for Python 3.7 and in Ubuntu 20.04 there's Python 3.8 but hopefully this will work
