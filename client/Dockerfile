@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpng-dev \
     python3-pip \
     \
+    build-essential \
     cmake \
     gcc \
     git \
@@ -39,8 +40,8 @@ RUN pip install --no-cache-dir -f https://download.pytorch.org/whl/torch_stable.
 # Needs to run after numpy is installed, so we extracted it from requirements
 RUN cd /tmp \
     && git clone https://github.com/opencv/opencv.git \
-    && git checkout 4.5.3 \
     && cd opencv \
+    && git checkout 4.5.3 \
     && mkdir build \
     && cd build \
     && cmake ../ \
