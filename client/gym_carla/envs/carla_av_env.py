@@ -3,10 +3,11 @@ import os
 import cv2
 import skvideo.io
 import numpy as np
+import gym
 
 import rewards
-
 import experiment_suites
+
 import carla.driving_benchmark.experiment_suites as experiment_suites_benchmark
 from carla.client import VehicleControl
 from carla.planner.planner import Planner
@@ -14,14 +15,15 @@ from carla.settings import CarlaSettings
 from carla.client import CarlaClient
 from carla.tcp import TCPConnectionError
 from observation_utils import CameraException
-import gym
+
 
 from carla_logger import get_carla_logger
 # TODO: Remove this before open-sourcing environment
 
-class CarlaEnv(object):
+
+class CarlaAVEnv(gym.Env):
     '''
-        An OpenAI Gym Environment for CARLA.
+        An OpenAI Gym Environment for Autonomous Vehicles in CARLA.
     '''
 
     def __init__(self,
@@ -31,7 +33,7 @@ class CarlaEnv(object):
                  random_seed=0,
                  exp_suite_name='TrainingSuite',
                  reward_class_name='RewardCarla',
-                 host='127.0.0.1',
+                 host='server',
                  port=2000,
                  city_name='Town01',
                  subset=None,
@@ -80,7 +82,6 @@ class CarlaEnv(object):
         self.steps = 0
         self.num_episodes = 0
 
-
     def step(self, action):
 
         if self.done:
@@ -100,7 +101,7 @@ class CarlaEnv(object):
                 distance_to_goal = self._get_distance_to_goal(measurements, self._target)
                 self.last_distance_to_goal = distance_to_goal
                 directions = self._get_directions(measurements.player_measurements.transform,
-                                                self._target)
+                                                  self._target)
                 self.last_direction = directions
                 obs = self._obs_converter.convert(measurements, sensor_data, directions, self._target, self.id)
 
@@ -136,7 +137,6 @@ class CarlaEnv(object):
             self.logger.debug('Success')
         self.done = timeout or collision or success
 
-
         # Get the reward
         env_state = {'timeout': timeout, 'collision': collision, 'success': success}
         reward = self._reward.get_reward(measurements, self._target, self.last_direction, control, env_state)
@@ -147,7 +147,6 @@ class CarlaEnv(object):
         self.steps += 1
 
         return obs, reward, self.done, info
-
 
     def reset(self):
 
@@ -199,7 +198,6 @@ class CarlaEnv(object):
                 time.sleep(5)
                 self._make_carla_client(self.host, self.port)
 
-
     def disconnect(self):
 
         if self.video_writer is not None:
@@ -212,16 +210,15 @@ class CarlaEnv(object):
 
         self._client.disconnect()
 
-
     def _raster_frame(self, sensor_data, measurements, directions, obs):
 
         frame = sensor_data['CameraRGB'].data.copy()
         cv2.putText(frame, text='Episode number: {:,}'.format(self.num_episodes-1),
-                org=(50, 50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.0,
-                color=[0, 0, 0], thickness=2)
+                    org=(50, 50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.0,
+                    color=[0, 0, 0], thickness=2)
         cv2.putText(frame, text='Environment steps: {:,}'.format(self.steps),
-                org=(50, 80), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.0,
-                color=[0, 0, 0], thickness=2)
+                    org=(50, 80), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.0,
+                    color=[0, 0, 0], thickness=2)
 
         REACH_GOAL = 0.0
         GO_STRAIGHT = 5.0
@@ -243,7 +240,7 @@ class CarlaEnv(object):
         cv2.putText(frame, text='Direction: {}'.format(dir_str),
                     org=(50, 110), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.0,
                     color=[0, 0, 0], thickness=2)
-        cv2.putText(frame, text='Speed: {:.02f}'.format( measurements.player_measurements.forward_speed * 3.6),
+        cv2.putText(frame, text='Speed: {:.02f}'.format(measurements.player_measurements.forward_speed * 3.6),
                     org=(50, 140), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.0,
                     color=[0, 0, 0], thickness=2)
         cv2.putText(frame, text='rel_x: {:.02f}, rel_y: {:.02f}'.format(obs['v'][-2].item(), obs['v'][-1].item()),
@@ -251,15 +248,13 @@ class CarlaEnv(object):
                     color=[0, 0, 0], thickness=2)
         self.video_writer.writeFrame(frame)
 
-
     def _get_distance_to_goal(self, measurements, target):
 
         current_x = measurements.player_measurements.transform.location.x
         current_y = measurements.player_measurements.transform.location.y
-        distance_to_goal = np.linalg.norm(np.array([current_x, current_y]) - \
-                            np.array([target.location.x, target.location.y]))
+        distance_to_goal = np.linalg.norm(np.array([current_x, current_y]) -
+                                          np.array([target.location.x, target.location.y]))
         return distance_to_goal
-
 
     def _new_episode(self):
         experiment_idx = np.random.randint(0, len(self._experiments))
@@ -274,12 +269,11 @@ class CarlaEnv(object):
         end_index = pose[1]
         self._client.start_episode(start_index)
         self._time_out = self._experiment_suite.calculate_time_out(
-                        self._get_shortest_path(positions[start_index], positions[end_index]))
+            self._get_shortest_path(positions[start_index], positions[end_index]))
         self._target = positions[end_index]
         self._episode_name = str(experiment.Conditions.WeatherId) + '_' \
-                            + str(experiment.task) + '_' + str(start_index) \
-                            + '_' + str(end_index)
-
+            + str(experiment.task) + '_' + str(start_index) \
+            + '_' + str(end_index)
 
         if ((self.num_episodes % self.video_every) == 0) and (self.id == 0):
             video_path = os.path.join(self.video_dir, '{:08d}_'.format(self.num_episodes) + self._episode_name + '.mp4')
@@ -322,11 +316,11 @@ class CarlaEnv(object):
         end_index = pose[1]
         self._client.start_episode(start_index)
         self._time_out = self._experiment_suite.calculate_time_out(
-                        self._get_shortest_path(positions[start_index], positions[end_index]))
+            self._get_shortest_path(positions[start_index], positions[end_index]))
         self._target = positions[end_index]
         self._episode_name = str(experiment.Conditions.WeatherId) + '_' \
-                            + str(experiment.task) + '_' + str(start_index) \
-                            + '_' + str(end_index)
+            + str(experiment.task) + '_' + str(start_index) \
+            + '_' + str(end_index)
         if ((self.num_episodes % self.video_every) == 0) and (self.id == 0):
             video_path = os.path.join(self.video_dir, '{:08d}_'.format(self.num_episodes) + self._episode_name + '.mp4')
             self.logger.info('Writing video at {}'.format(video_path))
@@ -335,7 +329,6 @@ class CarlaEnv(object):
             self.video_writer = None
 
         self.num_episodes += 1
-
 
     def _get_directions(self, current_point, end_point):
 
@@ -349,15 +342,13 @@ class CarlaEnv(object):
             (end_point.orientation.x, end_point.orientation.y, end_point.orientation.z))
         return directions
 
-
     def _get_shortest_path(self, start_point, end_point):
 
         return self._planner.get_shortest_path_distance(
-            [   start_point.location.x, start_point.location.y, 0.22], [
+            [start_point.location.x, start_point.location.y, 0.22], [
                 start_point.orientation.x, start_point.orientation.y, 0.22], [
                 end_point.location.x, end_point.location.y, end_point.location.z], [
                 end_point.orientation.x, end_point.orientation.y, end_point.orientation.z])
-
 
     @staticmethod
     def _is_collision(measurements):
@@ -372,7 +363,6 @@ class CarlaEnv(object):
         otherlane_intersection = measurements.player_measurements.intersection_otherlane
 
         return (c > 1e-9) or (sidewalk_intersection > 0.01) or (otherlane_intersection > 0.9), c
-
 
     def _make_carla_client(self, host, port):
 

@@ -1,8 +1,9 @@
 import torch
 import numpy as np
 
-from carla.agent.agent import Agent
-from carla.client import VehicleControl
+from carla.agents.navigation.agent import Agent
+from carla import VehicleControl
+
 
 class ForwardCarla(Agent):
     """
@@ -24,7 +25,6 @@ class ForwardCarla(Agent):
             return torch.Tensor([0]), torch.Tensor([6]), torch.Tensor([1]), torch.zeros([20])
         else:
             return torch.Tensor([0]), torch.Tensor([throttle, 0, 0]), torch.Tensor([1]), torch.zeros([20])
-
 
     def update(self, rollouts):
         return 0, 0, 0

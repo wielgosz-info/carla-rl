@@ -32,7 +32,7 @@ import agents
 from arguments import get_args
 from observation_utils import CarlaObservationConverter
 from action_utils import CarlaActionsConverter
-from env import CarlaEnv
+from env import CarlaAVEnv
 from vec_env.util import dict_to_obs, obs_to_dict
 from carla.driving_benchmark.recording import Recording
 from carla.driving_benchmark.metrics import Metrics
@@ -100,20 +100,20 @@ if __name__ == '__main__':
         help='If you want to continue the experiment with the same name'
     )
     argparser.add_argument(
-	'--cuda',
-	default=False,
-	help='If you are using a CPU, set it to False'
+        '--cuda',
+        default=False,
+        help='If you are using a CPU, set it to False'
     )
     argparser.add_argument(
-	'--save-dir',
-	default='./outputs',
-	help='Directory to save model, logs and videos'
+        '--save-dir',
+        default='./outputs',
+        help='Directory to save model, logs and videos'
     )
     argparser.add_argument(
-	'--video-interval', type=int, default=1
+        '--video-interval', type=int, default=1
     )
     argparser.add_argument(
-	'--save-interval', type=int, default=5
+        '--save-interval', type=int, default=5
     )
     args = argparser.parse_args()
     log_level = logging.INFO
@@ -135,9 +135,9 @@ if __name__ == '__main__':
         experiment_suite = CoRL2017(args.city_name)
         experiment_name = 'CoRL2017'
     else:
-        print (' WARNING: running the basic driving benchmark, to run for CoRL 2017'
-               ' experiment suites, you should run'
-               ' python driving_benchmark_example.py --corl-2017')
+        print(' WARNING: running the basic driving benchmark, to run for CoRL 2017'
+              ' experiment suites, you should run'
+              ' python driving_benchmark_example.py --corl-2017')
         experiment_suite = BasicExperimentSuite(args.city_name)
         experiment_name = 'BasicExperimentSuite'
 
@@ -194,14 +194,14 @@ if __name__ == '__main__':
         load_modules(agent.optimizer, agent.model, checkpoint)
 
     vec_norm = get_vec_normalize(envs)
-    #if vec_norm is not None:
+    # if vec_norm is not None:
     #    vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
 
     metrics_object = Metrics(experiment_suite.metrics_parameters,
                              experiment_suite.dynamic_tasks)
     recording = Recording(name_to_save=args.save_dir,
-              continue_experiment=False,
-              save_images=True)
+                          continue_experiment=False,
+                          save_images=True)
 
     logging.info('START')
     iter = True
@@ -222,7 +222,8 @@ if __name__ == '__main__':
             recording.log_start(id_experiment=experiment.task)
 
             poses = experiment.poses[0:]
-            print('Benchmarking experiment {} out of {}, which contains {} poses'.format(exp_idx+1, len(experiments), len(poses)))
+            print('Benchmarking experiment {} out of {}, which contains {} poses'.format(
+                exp_idx+1, len(experiments), len(poses)))
 
             start_index = pose[0]
             end_index = pose[1]
@@ -235,7 +236,7 @@ if __name__ == '__main__':
             initial_distance = envs.venv.venv.venv.envs[0].last_distance_to_goal
 
             recurrent_hidden_states = torch.zeros(config.num_processes,
-                                                       20, device=device)
+                                                  20, device=device)
             masks = torch.zeros(config.num_processes, 1, device=device)
 
             reward_vec = []
@@ -243,14 +244,14 @@ if __name__ == '__main__':
             print('beginning of the while loop')
             done = [False, False, False]
             while any(done) is False:
-            # while (envs.venv.venv.venv.envs[0]._failure_timeout is False) and (envs.venv.venv.venv.envs[0]._failure_collision is False) and (envs.venv.venv.venv.envs[0]._success is False):
+                # while (envs.venv.venv.venv.envs[0]._failure_timeout is False) and (envs.venv.venv.venv.envs[0]._failure_collision is False) and (envs.venv.venv.venv.envs[0]._success is False):
                 with torch.no_grad():
                     _, action, _, recurrent_hidden_states = agent.act(
                         obs, recurrent_hidden_states, masks, deterministic=True)
                 # Observe reward and next obs
                 carla_obs, reward, done, infos = envs.step(action)
                 masks = torch.FloatTensor([[0.0] if done_ else [1.0]
-                                                for done_ in done])
+                                           for done_ in done])
                 if config.action_type == 'carla-original':
                     control = action_converter.action_to_control(int(action[0][0]))
                 else:
@@ -258,7 +259,7 @@ if __name__ == '__main__':
                 if envs.venv.venv.venv.envs[0]._reward.state is None:
                     rw_vec = {'d_x': envs.venv.venv.venv.envs[0].last_measurements.player_measurements.transform.location.x,
                               'd_y': envs.venv.venv.venv.envs[0].last_measurements.player_measurements.transform.location.y,
-                              'c_o': 0, 'c_p':0, 'c_v': 0, 'o':0, 's':0}
+                              'c_o': 0, 'c_p': 0, 'c_v': 0, 'o': 0, 's': 0}
                 else:
                     rw_vec = envs.venv.venv.venv.envs[0]._reward.state
 
@@ -266,15 +267,16 @@ if __name__ == '__main__':
                 control_vec.append(control)
 
                 masks = torch.FloatTensor([[0.0] if done_ else [1.0]
-                                                for done_ in done])
+                                           for done_ in done])
                 recording.write_summary_results(
-                experiments[exp_idx],
-                pose,
-                rep,
-                initial_distance,
-                envs.venv.venv.venv.envs[0].last_distance_to_goal,
-                envs.venv.venv.venv.envs[0].last_measurements.game_timestamp - envs.venv.venv.venv.envs[0]._initial_timestamp,
-                int(envs.venv.venv.venv.envs[0]._failure_timeout), int(envs.venv.venv.venv.envs[0]._success))
+                    experiments[exp_idx],
+                    pose,
+                    rep,
+                    initial_distance,
+                    envs.venv.venv.venv.envs[0].last_distance_to_goal,
+                    envs.venv.venv.venv.envs[0].last_measurements.game_timestamp -
+                    envs.venv.venv.venv.envs[0]._initial_timestamp,
+                    int(envs.venv.venv.venv.envs[0]._failure_timeout), int(envs.venv.venv.venv.envs[0]._success))
 
                 if envs.venv.venv.venv.envs[0]._success:
                     logging.info('+++++ Target achieved in %f seconds! +++++',
@@ -286,11 +288,9 @@ if __name__ == '__main__':
                 else:
                     logging.info('----- Collision! -----')
 
-
             # Write the details of this episode.
             print('end of the while loop')
             recording.write_measurements_results(experiments[exp_idx], rep, pose, reward_vec, control_vec)
-
 
             print('experiment ended')
             recording.log_end()
@@ -306,7 +306,7 @@ if __name__ == '__main__':
     print("")
     print("")
     print_summary(benchmark_summary, experiment_suite.train_weathers,
-                                  recording.path)
+                  recording.path)
 
     print("")
     print("")
@@ -315,4 +315,4 @@ if __name__ == '__main__':
     print("")
 
     print_summary(benchmark_summary, experiment_suite.test_weathers,
-                                  recording.path)
+                  recording.path)

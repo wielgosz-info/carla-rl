@@ -1,34 +1,24 @@
-import copy
+import datetime
 import os
-import time
-import yaml
 import shutil
+import time
 from collections import namedtuple
 
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from IPython import embed
-from carla.tcp import TCPConnectionError
-from carla_logger import setup_carla_logger
-
-import traceback
-import argparse
-from envs_manager import make_vec_envs
-from storage import RolloutStorage
-from utils import get_vec_normalize, save_modules, load_modules
-
-import datetime
+import yaml
 from tensorboardX import SummaryWriter
 
 import agents
-from arguments import get_args
-from observation_utils import CarlaObservationConverter
 from action_utils import CarlaActionsConverter
-from env import CarlaEnv
+from arguments import get_args
+from carla_logger import setup_carla_logger
+from envs_manager import make_vec_envs
+from observation_utils import CarlaObservationConverter
+from storage import RolloutStorage
+from utils import get_vec_normalize, load_modules, save_modules
 from vec_env.util import dict_to_obs, obs_to_dict
+
 
 def get_config_and_checkpoint(args):
     config_dict, checkpoint = None, None
@@ -52,6 +42,7 @@ def get_config_and_checkpoint(args):
     config = namedtuple('Config', config_dict.keys())(*config_dict.values())
     return config, checkpoint
 
+
 def load_config_file(filename):
     with open(filename, 'r') as f:
         config = yaml.safe_load(f)
@@ -62,12 +53,14 @@ def load_config_file(filename):
         config['alpha'] = float(config['alpha'])
         return config
 
+
 def set_random_seeds(args, config):
     np.random.seed(config.seed)
     torch.manual_seed(config.seed)
     if args.cuda:
         torch.cuda.manual_seed(config.seed)
     # TODO: Set CARLA seed (or env seed)
+
 
 def main():
     config = None
@@ -108,14 +101,14 @@ def main():
     norm_reward = not config.no_reward_norm
     norm_obs = not config.no_obs_norm
 
-    assert not (config.num_virtual_goals > 0) or (config.reward_class == 'SparseReward'), 'Cant use HER with dense reward'
+    assert not (config.num_virtual_goals > 0) or (config.reward_class ==
+                                                  'SparseReward'), 'Cant use HER with dense reward'
     obs_converter = CarlaObservationConverter(h=84, w=84, rel_coord_system=config.rel_coord_system)
     action_converter = CarlaActionsConverter(config.action_type)
     envs = make_vec_envs(obs_converter, action_converter, args.starting_port, config.seed, config.num_processes,
-                                config.gamma, device, config.reward_class, num_frame_stack=1, subset=config.experiments_subset,
-                                norm_reward=norm_reward, norm_obs=norm_obs, apply_her=config.num_virtual_goals > 0,
-                                video_every=args.video_interval, video_dir=os.path.join(args.save_dir, 'video', experiment_name))
-
+                         config.gamma, device, config.reward_class, num_frame_stack=1, subset=config.experiments_subset,
+                         norm_reward=norm_reward, norm_obs=norm_obs, apply_her=config.num_virtual_goals > 0,
+                         video_every=args.video_interval, video_dir=os.path.join(args.save_dir, 'video', experiment_name))
 
     if config.agent == 'forward':
         agent = agents.ForwardCarla()
@@ -155,8 +148,8 @@ def main():
         load_modules(agent.optimizer, agent.model, checkpoint)
 
     rollouts = RolloutStorage(config.num_steps, config.num_processes,
-                        envs.observation_space, envs.action_space, 20,
-                        config.num_virtual_goals, config.rel_coord_system, obs_converter)
+                              envs.observation_space, envs.action_space, 20,
+                              config.num_virtual_goals, config.rel_coord_system, obs_converter)
 
     obs = envs.reset()
     # Save the first observation
@@ -169,13 +162,11 @@ def main():
 
     start = time.time()
 
-
     total_steps = 0
     total_episodes = 0
     total_reward = 0
 
     episode_reward = torch.zeros(config.num_processes)
-
 
     for j in range(config.num_updates):
 
@@ -183,9 +174,9 @@ def main():
             # Sample actions
             with torch.no_grad():
                 value, action, action_log_prob, recurrent_hidden_states = agent.act(
-                        rollouts.get_obs(step),
-                        rollouts.recurrent_hidden_states[step],
-                        rollouts.masks[step])
+                    rollouts.get_obs(step),
+                    rollouts.recurrent_hidden_states[step],
+                    rollouts.masks[step])
 
             # Observe reward and next obs
             obs, reward, done, info = envs.step(action)
@@ -214,18 +205,17 @@ def main():
             rollouts.apply_her(config.num_virtual_goals, device, beta=config.beta)
 
         with torch.no_grad():
-            next_value = agent.get_value(rollouts.get_obs(-1), # Get last observation
+            next_value = agent.get_value(rollouts.get_obs(-1),  # Get last observation
                                          rollouts.recurrent_hidden_states[-1],
                                          rollouts.masks[-1]).detach()
 
         rollouts.compute_returns(next_value, config.use_gae, config.gamma, config.tau)
 
-
         value_loss, action_loss, dist_entropy = agent.update(rollouts)
 
         rollouts.after_update()
 
-        if j % args.save_interval == 0 and args.save_dir != "" and config.agent !='forward':
+        if j % args.save_interval == 0 and args.save_dir != "" and config.agent != 'forward':
             save_path = os.path.join(save_dir_model, str(j) + '.pth.tar')
             save_modules(agent.optimizer, agent.model, args, config, save_path)
 
@@ -236,10 +226,9 @@ def main():
             # Logging to the stdout/our logs
             end = time.time()
             logger.info('------------------------------------')
-            logger.info('Episodes {}, Updates {}, num timesteps {}, FPS {}'\
-                .format(total_episodes, j + 1, total_num_steps, total_num_steps / (end - start)))
+            logger.info('Episodes {}, Updates {}, num timesteps {}, FPS {}'
+                        .format(total_episodes, j + 1, total_num_steps, total_num_steps / (end - start)))
             logger.info('------------------------------------')
-
 
             # Logging to tensorboard
             writer.add_scalar('train/cum_reward_vs_steps', total_reward, total_steps)
@@ -272,7 +261,7 @@ def main():
 
             obs = eval_envs.reset()
             eval_recurrent_hidden_states = torch.zeros(config.num_processes,
-                            20, device=device)
+                                                       20, device=device)
             eval_masks = torch.zeros(config.num_processes, 1, device=device)
 
             while len(eval_episode_rewards) < 10:
@@ -292,9 +281,8 @@ def main():
             eval_envs.close()
 
             logger.info(" Evaluation using {} episodes: mean reward {:.5f}\n".
-                format(len(eval_episode_rewards),
-                       np.mean(eval_episode_rewards)))
-
+                        format(len(eval_episode_rewards),
+                               np.mean(eval_episode_rewards)))
 
 
 if __name__ == "__main__":

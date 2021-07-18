@@ -11,14 +11,16 @@ from vec_env.dummy_vec_env import DummyVecEnv
 from vec_env.vec_normalize import VecNormalize
 from vec_env.util import dict_to_obs, obs_to_dict
 
-from env import CarlaEnv
+from gym_carla.envs.carla_av_env import CarlaAVEnv
+
 
 def make_env(obs_converter, action_converter, port, id, seed, subset,
              video_every, video_dir, reward_class_name, experiment_suite, benchmark, city_name):
-    return lambda: CarlaEnv(obs_converter, action_converter, id, seed, reward_class_name=reward_class_name, port=port,
-                            subset=subset, video_every=video_every, video_dir=video_dir,
-                            exp_suite_name=experiment_suite,
-                            benchmark=benchmark, city_name=city_name)
+    return lambda: CarlaAVEnv(obs_converter, action_converter, id, seed, reward_class_name=reward_class_name, port=port,
+                              subset=subset, video_every=video_every, video_dir=video_dir,
+                              exp_suite_name=experiment_suite,
+                              benchmark=benchmark, city_name=city_name)
+
 
 def make_vec_envs(obs_converter, action_converter, starting_port, seed, num_processes, gamma,
                   device, reward_class_name, num_frame_stack=1, subset=None, norm_reward=True, norm_obs=True, video_every=100, video_dir='./video', apply_her=False,
@@ -111,7 +113,6 @@ class VecPyTorch(VecEnvWrapper):
         return dict_to_obs(obs), reward, done, info
 
 
-
 # Derived from
 # https://github.com/openai/baselines/blob/master/baselines/common/vec_env/vec_frame_stack.py
 class VecPyTorchFrameStack(VecEnvWrapper):
@@ -142,7 +143,6 @@ class VecPyTorchFrameStack(VecEnvWrapper):
             VecEnvWrapper.__init__(self, venv, observation_space=new_observation_spaces[None])
         else:
             VecEnvWrapper.__init__(self, venv, observation_space=gym.spaces.Dict(new_observation_spaces))
-
 
     def step_wait(self):
         obs, rews, news, infos = self.venv.step_wait()
