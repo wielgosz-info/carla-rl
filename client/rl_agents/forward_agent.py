@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-from carla.agents.navigation.agent import Agent
+from agents.navigation.agent import Agent
 from carla import VehicleControl
 
 

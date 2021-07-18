@@ -15,7 +15,7 @@ from carla.driving_benchmark.experiment_suites import BasicExperimentSuite
 
 from utils import load_modules
 from model import Policy
-import agents
+import rl_agents
 
 import torch
 
@@ -28,7 +28,7 @@ from utils import get_vec_normalize, save_modules, load_modules
 import datetime
 from tensorboardX import SummaryWriter
 
-import agents
+import rl_agents
 from arguments import get_args
 from observation_utils import CarlaObservationConverter
 from action_utils import CarlaActionsConverter
@@ -154,10 +154,10 @@ if __name__ == '__main__':
 
     # Agent instantiation
     if config.agent == 'forward':
-        agent = agents.ForwardCarla()
+        agent = rl_agents.ForwardCarla()
 
     elif config.agent == 'a2c':
-        agent = agents.A2CCarla(obs_converter,
+        agent = rl_agents.A2CCarla(obs_converter,
                                 action_converter,
                                 config.value_loss_coef,
                                 config.entropy_coef,
@@ -166,7 +166,7 @@ if __name__ == '__main__':
                                 max_grad_norm=config.max_grad_norm)
 
     elif config.agent == 'acktr':
-        agent = agents.A2CCarla(obs_converter,
+        agent = rl_agents.A2CCarla(obs_converter,
                                 action_converter,
                                 config.value_loss_coef,
                                 config.entropy_coef,
@@ -176,7 +176,7 @@ if __name__ == '__main__':
                                 acktr=True)
 
     elif config.agent == 'ppo':
-        agent = agents.PPOCarla(obs_converter,
+        agent = rl_agents.PPOCarla(obs_converter,
                                 action_converter,
                                 config.clip_param,
                                 config.ppo_epoch,

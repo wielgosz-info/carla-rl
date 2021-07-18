@@ -53,6 +53,9 @@ RUN cd /tmp \
 COPY --from=carlasim/carla:0.9.11 /home/carla/PythonAPI/carla/dist/carla-0.9.11-py3.7-linux-x86_64.egg /usr/local/lib/python3.8/dist-packages/carla-0.9.11-py3.7-linux-x86_64.egg
 RUN echo "import sys; sys.__plen = len(sys.path)\n./carla-0.9.11-py3.7-linux-x86_64.egg\nimport sys; new=sys.path[sys.__plen:]; del sys.path[sys.__plen:]; p=getattr(sys,'__egginsert',0); sys.path[p:p]=new; sys.__egginsert = p+len(new)" > /usr/local/lib/python3.8/dist-packages/easy_install.pth
 
+# We're also going to pretend that agents are installable so we can easily import them later; unfortunatelly it needs to be called 'agents' due to internal structure
+COPY --from=carlasim/carla:0.9.11 /home/carla/PythonAPI/carla/agents /usr/local/lib/python3.8/dist-packages/agents
+
 # Add requirements.txt first for caching purposes.
 WORKDIR /app
 COPY requirements.txt /app

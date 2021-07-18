@@ -9,7 +9,7 @@ import torch
 import yaml
 from tensorboardX import SummaryWriter
 
-import agents
+import rl_agents
 from action_utils import CarlaActionsConverter
 from arguments import get_args
 from carla_logger import setup_carla_logger
@@ -111,10 +111,10 @@ def main():
                          video_every=args.video_interval, video_dir=os.path.join(args.save_dir, 'video', experiment_name))
 
     if config.agent == 'forward':
-        agent = agents.ForwardCarla()
+        agent = rl_agents.ForwardCarla()
 
     if config.agent == 'a2c':
-        agent = agents.A2CCarla(obs_converter,
+        agent = rl_agents.A2CCarla(obs_converter,
                                 action_converter,
                                 config.value_loss_coef,
                                 config.entropy_coef,
@@ -123,7 +123,7 @@ def main():
                                 max_grad_norm=config.max_grad_norm)
 
     elif config.agent == 'acktr':
-        agent = agents.A2CCarla(obs_converter,
+        agent = rl_agents.A2CCarla(obs_converter,
                                 action_converter,
                                 config.value_loss_coef,
                                 config.entropy_coef,
@@ -133,7 +133,7 @@ def main():
                                 acktr=True)
 
     elif config.agent == 'ppo':
-        agent = agents.PPOCarla(obs_converter,
+        agent = rl_agents.PPOCarla(obs_converter,
                                 action_converter,
                                 config.clip_param,
                                 config.ppo_epoch,
