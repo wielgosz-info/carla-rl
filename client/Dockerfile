@@ -66,7 +66,9 @@ ENV HOME /home/${USERNAME}
 
 RUN groupadd -g ${GROUP_ID} ${USERNAME} \
     && useradd -ms /bin/bash -u ${USER_ID} -g ${GROUP_ID} ${USERNAME} \
-    && echo "${USERNAME}:${USERNAME}" | chpasswd
+    && echo "${USERNAME}:${USERNAME}" | chpasswd \
+    && mkdir ${HOME}/.vscode-server ${HOME}/.vscode-server-insiders \
+    && chown ${USERNAME}:${USERNAME} ${HOME}/.vscode-server ${HOME}/.vscode-server-insiders
 USER carla-rl-client
 
 # Run infinite loop to allow easily attach to container
