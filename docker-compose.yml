@@ -63,6 +63,7 @@ services:
       - ${PWD}/client:/app
       - vscode:/home/carla-rl-client/.vscode-server
       - vscode-insiders:/home/carla-rl-client/.vscode-server-insiders
+      - outputs:/outputs
     environment:
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: compute,graphics,utility
@@ -80,3 +81,4 @@ services:
 volumes: 
   vscode:
   vscode-insiders:
+  outputs:

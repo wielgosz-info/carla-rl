@@ -18,7 +18,7 @@ def get_args():
                         help='eval interval, one eval per n updates (default: None)')
     parser.add_argument('--no-cuda', action='store_true', default=False,
                         help='disables CUDA training')
-    parser.add_argument('--save-dir', default='./outputs', help='directory to save models, logs and videos')
+    parser.add_argument('--save-dir', default='/outputs', help='directory to save models, logs and videos')
     parser.add_argument('--resume-training', default=None, help='checkpoint file to resume training from')
     args = parser.parse_args()
 
