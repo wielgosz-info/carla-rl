@@ -13,7 +13,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install torch==1.9.0+cu111 torchvision==0.10.0+cu111 torchaudio==0.9.0 -f https://download.pytorch.org/whl/torch_stable.html --no-cache
+RUN pip install --no-cache-dir -f https://download.pytorch.org/whl/torch_stable.html \
+    torch==1.9.0+cu111 \
+    torchvision==0.10.0+cu111 \
+    torchaudio==0.9.0 \
+    && pip install --no-cache-dir \
+    autopep8
 
 # Let's pretend we've installed CARLA via easy_install
 # It's client for Python 3.7 and in Ubuntu 20.04 there's Python 3.8 but hopefully this will work
@@ -23,7 +28,19 @@ RUN echo "import sys; sys.__plen = len(sys.path)\n./carla-0.9.11-py3.7-linux-x86
 # Add requirements.txt first for caching purposes.
 WORKDIR /app
 COPY requirements.txt /app
-RUN pip install -r requirements.txt
+RUN pip install -r requirements.txt  --no-cache-dir
+
+
+# Create non-root user
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+ARG USERNAME=carla-rl-client
+ENV HOME /home/${USERNAME}
+
+RUN groupadd -g ${GROUP_ID} ${USERNAME} \
+    && useradd -ms /bin/bash -u ${USER_ID} -g ${GROUP_ID} ${USERNAME} \
+    && echo "${USERNAME}:${USERNAME}" | chpasswd
+USER carla-rl-client
 
 # Run infinite loop to allow easily attach to container
 CMD ["/bin/sh", "-c", "while sleep 1000; do :; done"]
