@@ -2,6 +2,7 @@
 Nov-15/
 logging/
 outputs/
+outputs_eval/
 PythonClient/outputs
 PythonClient/_benchmarks_results/
 _benchmarks_results/

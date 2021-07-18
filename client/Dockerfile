@@ -11,6 +11,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg-turbo8-dev \
     libpng-dev \
     python3-pip \
+    \
+    cmake \
+    gcc \
+    git \
+    g++ \
+    python3-dev \
+    libavcodec-dev \
+    libavformat-dev \
+    libswscale-dev \
+    libavresample-dev \
+    libopenjp2-7-dev \
+    libgstreamer-plugins-base1.0-dev \
+    libgstreamer1.0-dev \
+    \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir -f https://download.pytorch.org/whl/torch_stable.html \
@@ -18,7 +32,20 @@ RUN pip install --no-cache-dir -f https://download.pytorch.org/whl/torch_stable.
     torchvision==0.10.0+cu111 \
     torchaudio==0.9.0 \
     && pip install --no-cache-dir \
-    autopep8
+    autopep8 \
+    pylint
+
+# Compile OpenCV
+# Needs to run after numpy is installed, so we extracted it from requirements
+RUN cd /tmp \
+    && git clone https://github.com/opencv/opencv.git \
+    && git checkout 4.5.3 \
+    && cd opencv \
+    && mkdir build \
+    && cd build \
+    && cmake ../ \
+    && make -j32 \
+    && make install
 
 # Let's pretend we've installed CARLA via easy_install
 # It's client for Python 3.7 and in Ubuntu 20.04 there's Python 3.8 but hopefully this will work
@@ -29,7 +56,6 @@ RUN echo "import sys; sys.__plen = len(sys.path)\n./carla-0.9.11-py3.7-linux-x86
 WORKDIR /app
 COPY requirements.txt /app
 RUN pip install -r requirements.txt  --no-cache-dir
-
 
 # Create non-root user
 ARG USER_ID=1000

@@ -1,3 +1,7 @@
+# WIP updates to use CARLA 0.9.11 in progress, do not run since it won't work anyway :)
+
+----------------------------------------
+
 # Carla RL Project
 
 ## Installation and Setup
