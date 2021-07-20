@@ -78,6 +78,9 @@ def main():
     now = datetime.datetime.now()
     experiment_name = args.experiment_name + '_' + now.strftime("%Y-%m-%d_%H-%M-%S")
 
+    # Logger that writes to STDOUT and a file in the save_dir
+    logger = setup_carla_logger(args.save_dir, experiment_name)
+
     # Create checkpoint file
     save_dir_model = os.path.join(args.save_dir, 'model', experiment_name)
     save_dir_config = os.path.join(args.save_dir, 'config', experiment_name)
@@ -93,9 +96,6 @@ def main():
 
     # Tensorboard Logging
     writer = SummaryWriter(os.path.join(args.save_dir, 'tensorboard', experiment_name))
-
-    # Logger that writes to STDOUT and a file in the save_dir
-    logger = setup_carla_logger(args.save_dir, experiment_name)
 
     device = torch.device("cuda:0" if args.cuda else "cpu")
     norm_reward = not config.no_reward_norm
@@ -115,34 +115,34 @@ def main():
 
     if config.agent == 'a2c':
         agent = rl_agents.A2CCarla(obs_converter,
-                                action_converter,
-                                config.value_loss_coef,
-                                config.entropy_coef,
-                                lr=config.lr,
-                                eps=config.eps, alpha=config.alpha,
-                                max_grad_norm=config.max_grad_norm)
+                                   action_converter,
+                                   config.value_loss_coef,
+                                   config.entropy_coef,
+                                   lr=config.lr,
+                                   eps=config.eps, alpha=config.alpha,
+                                   max_grad_norm=config.max_grad_norm)
 
     elif config.agent == 'acktr':
         agent = rl_agents.A2CCarla(obs_converter,
-                                action_converter,
-                                config.value_loss_coef,
-                                config.entropy_coef,
-                                lr=config.lr,
-                                eps=config.eps, alpha=config.alpha,
-                                max_grad_norm=config.max_grad_norm,
-                                acktr=True)
+                                   action_converter,
+                                   config.value_loss_coef,
+                                   config.entropy_coef,
+                                   lr=config.lr,
+                                   eps=config.eps, alpha=config.alpha,
+                                   max_grad_norm=config.max_grad_norm,
+                                   acktr=True)
 
     elif config.agent == 'ppo':
         agent = rl_agents.PPOCarla(obs_converter,
-                                action_converter,
-                                config.clip_param,
-                                config.ppo_epoch,
-                                config.num_mini_batch,
-                                config.value_loss_coef,
-                                config.entropy_coef,
-                                lr=config.lr,
-                                eps=config.eps,
-                                max_grad_norm=config.max_grad_norm)
+                                   action_converter,
+                                   config.clip_param,
+                                   config.ppo_epoch,
+                                   config.num_mini_batch,
+                                   config.value_loss_coef,
+                                   config.entropy_coef,
+                                   lr=config.lr,
+                                   eps=config.eps,
+                                   max_grad_norm=config.max_grad_norm)
 
     if checkpoint is not None:
         load_modules(agent.optimizer, agent.model, checkpoint)

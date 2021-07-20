@@ -37,7 +37,7 @@ RUN pip install --no-cache-dir -f https://download.pytorch.org/whl/torch_stable.
     pylint
 
 # Compile OpenCV
-# Needs to run after numpy is installed, so we extracted it from requirements
+# TODO: Maybe pip install opencv-python-headless (or opencv-contrib-python-headless) would be enough? check someday
 RUN cd /tmp \
     && git clone https://github.com/opencv/opencv.git \
     && cd opencv \

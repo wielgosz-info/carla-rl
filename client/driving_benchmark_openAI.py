@@ -14,7 +14,6 @@ from carla.driving_benchmark.experiment_suites import CoRL2017
 from carla.driving_benchmark.experiment_suites import BasicExperimentSuite
 
 from utils import load_modules
-from model import Policy
 import rl_agents
 
 import torch
@@ -22,23 +21,15 @@ import torch
 from carla_logger import setup_carla_logger
 from train import get_config_and_checkpoint
 from envs_manager import make_vec_envs
-from storage import RolloutStorage
-from utils import get_vec_normalize, save_modules, load_modules
-
-import datetime
-from tensorboardX import SummaryWriter
+from utils import get_vec_normalize, load_modules
 
 import rl_agents
-from arguments import get_args
 from observation_utils import CarlaObservationConverter
 from action_utils import CarlaActionsConverter
-from env import CarlaAVEnv
-from vec_env.util import dict_to_obs, obs_to_dict
+
 from carla.driving_benchmark.recording import Recording
 from carla.driving_benchmark.metrics import Metrics
 from carla.driving_benchmark.results_printer import print_summary
-
-from carla.tcp import TCPConnectionError
 
 if __name__ == '__main__':
 
@@ -64,8 +55,8 @@ if __name__ == '__main__':
     argparser.add_argument(
         '--host',
         metavar='H',
-        default='localhost',
-        help='IP of the host server (default: localhost)')
+        default='server',
+        help='IP of the host server (default: server)')
     argparser.add_argument(
         '-p', '--port',
         metavar='P',
@@ -101,12 +92,12 @@ if __name__ == '__main__':
     )
     argparser.add_argument(
         '--cuda',
-        default=False,
+        default=True,
         help='If you are using a CPU, set it to False'
     )
     argparser.add_argument(
         '--save-dir',
-        default='./outputs',
+        default='/outputs',
         help='Directory to save model, logs and videos'
     )
     argparser.add_argument(
@@ -141,7 +132,7 @@ if __name__ == '__main__':
         experiment_suite = BasicExperimentSuite(args.city_name)
         experiment_name = 'BasicExperimentSuite'
 
-    logger = setup_carla_logger('output_logger/', experiment_name, 'carla-debug')
+    logger = setup_carla_logger(os.path.join(args.save_dir, 'debug'), experiment_name, 'carla-debug')
     envs = make_vec_envs(obs_converter, action_converter, args.port, config.seed, config.num_processes,
                          config.gamma, device, reward_class_name='RewardCarla', num_frame_stack=1, subset=None,
                          norm_reward=norm_reward,

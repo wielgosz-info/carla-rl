@@ -7,7 +7,7 @@
 import math
 import numpy as np
 
-from carla.planner.graph import string_to_floats
+from carla_original.planner.graph import string_to_floats
 
 # Constant definition enumeration
 
@@ -58,7 +58,6 @@ class Converter(object):
             raise ValueError('Invalid node to be converted')
 
     def convert_to_pixel(self, input_data):
-
         """
         Receives a data type (Can Be Node or World )
         :param input_data: position in some coordinate
@@ -75,7 +74,6 @@ class Converter(object):
             raise ValueError('Invalid node to be converted')
 
     def convert_to_world(self, input_data):
-
         """
         Receives a data type (Can Be Pixel or Node )
         :param input_data: position in some coordinate
@@ -96,8 +94,7 @@ class Converter(object):
         :param node:
         :return: pixel
         """
-        pixel = [((node[0] + 2) * self._node_density)
-            , ((node[1] + 2) * self._node_density)]
+        pixel = [((node[0] + 2) * self._node_density), ((node[1] + 2) * self._node_density)]
         return pixel
 
     def _pixel_to_node(self, pixel):
@@ -106,8 +103,7 @@ class Converter(object):
         :param node:
         :return: pixel
         """
-        node = [int(((pixel[0]) / self._node_density) - 2)
-            , int(((pixel[1]) / self._node_density) - 2)]
+        node = [int(((pixel[0]) / self._node_density) - 2), int(((pixel[1]) / self._node_density) - 2)]
 
         return tuple(node)
 
@@ -142,8 +138,6 @@ class Converter(object):
         relative_location = [rotation[0] + self._worldoffset[0] - self._mapoffset[0],
                              rotation[1] + self._worldoffset[1] - self._mapoffset[1],
                              rotation[2] + self._worldoffset[2] - self._mapoffset[2]]
-
-
 
         pixel = [math.floor(relative_location[0] / float(self._pixel_density)),
                  math.floor(relative_location[1] / float(self._pixel_density))]

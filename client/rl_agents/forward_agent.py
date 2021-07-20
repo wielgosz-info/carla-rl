@@ -1,11 +1,9 @@
 import torch
 import numpy as np
 
-from agents.navigation.agent import Agent
-from carla import VehicleControl
+from rl_agents.rl_agent import RLAgent
 
-
-class ForwardCarla(Agent):
+class ForwardCarla(RLAgent):
     """
     Simple derivation of Agent Class,
     A trivial agent agent that goes straight

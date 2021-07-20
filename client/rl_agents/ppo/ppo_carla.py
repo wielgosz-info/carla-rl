@@ -4,10 +4,10 @@ import torch.optim as optim
 import numpy as np
 import torch.nn.functional as F
 
-from carla.agent.agent import Agent
+from rl_agents.rl_agent import RLAgent
 from model import Policy
 
-class PPOCarla(Agent):
+class PPOCarla(RLAgent):
 
     def __init__(self,
                  obs_converter, 

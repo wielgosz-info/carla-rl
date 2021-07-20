@@ -4,11 +4,11 @@ import torch.optim as optim
 import numpy as np
 
 from .kfac import KFACOptimizer
-from carla.agent.agent import Agent
+from rl_agents.rl_agent import RLAgent
 from model import Policy
 
 
-class A2CCarla(Agent):
+class A2CCarla(RLAgent):
     def __init__(self,
                  obs_converter,
                  action_converter,
