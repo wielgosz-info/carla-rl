@@ -52,6 +52,20 @@ class Experiment(object):
 
     @property
     def poses(self):
+        '''
+        Poses is a list of pairs of integers.
+        Each pair defines starting (0) and stopping (1) point for the experiment.
+        The int value is an index of the spawn point on the list returned from
+        carla.Client.get_world().get_map().get_spawn_points()
+
+        For example, poses=[[7, 3]] means that a task have a single pose,
+        and starting point for vehicle is spawn point with index 7,
+        while target location is spawn point with index 3.
+
+        Each task can have multiple poses, e.g. there can be multiple combinations
+        of start/stop points that will yield desired environment. Imagine taking
+        the map and finding all places where vehicle can turn left.
+        '''
         return self._poses
 
     @property
