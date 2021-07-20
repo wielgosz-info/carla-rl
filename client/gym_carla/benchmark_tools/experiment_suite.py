@@ -23,10 +23,22 @@ class ExperimentSuite(object):
 
     def calculate_time_out(self, path_distance):
         """
-        Function to return the timeout, in milliseconds,
-        that is calculated based on distance to goal.
-        This is the same timeout as used on the CoRL paper.
+        Function to return the timeout, in seconds,
+        that is calculated based on distance (in meters).
         """
+        #  Originally, path distance was in map coordinates
+        #  and I have no idea how it corresponded to meters.
+        #  But now we will supply it in meters since that's
+        #  what we can get from
+        #  GlobalRoutePlanner.track_route() * waypoints resolution.
+        #  Also, we're only really ever interested in seconds
+        #  (not milliseconds as documented in the original file).
+
+        #  So, assuming the path_distance is in meters,
+        #  and the minimal sensible average velocity is 10km/h (~2.78 m/s),
+        #  and we're adding 10s of "bonus" time (start/stop),
+        #  and we want the result to be in seconds
+        #  we get the exact same equation ;)
         return ((path_distance / 1000.0) / 10.0) * 3600.0 + 10.0
 
     def get_number_of_poses_task(self):
