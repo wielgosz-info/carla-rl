@@ -1,7 +1,7 @@
 import torch
-import numpy as np
 
-from rl_agents.rl_agent import RLAgent
+from .rl_agent import RLAgent
+
 
 class ForwardCarla(RLAgent):
     """

@@ -1,4 +1,6 @@
 import datetime
+from gym_carla.converters.actions.discrete import DiscreteActionsConverter
+from gym_carla.converters.actions.continuous_tbs import ContinuousTBSActionsConverter
 import os
 import shutil
 import time
@@ -10,11 +12,12 @@ import yaml
 from tensorboardX import SummaryWriter
 
 import rl_agents
-from action_utils import CarlaActionsConverter
 from arguments import get_args
 from carla_logger import setup_carla_logger
 from envs_manager import make_vec_envs
-from observation_utils import CarlaObservationConverter
+from gym_carla.converters.actions_converter import CarlaActionsConverter
+from gym_carla.converters.observations_converter import \
+    CarlaObservationsConverter
 from storage import RolloutStorage
 from utils import get_vec_normalize, load_modules, save_modules
 from vec_env.util import dict_to_obs, obs_to_dict
@@ -103,8 +106,12 @@ def main():
 
     assert not (config.num_virtual_goals > 0) or (config.reward_class ==
                                                   'SparseReward'), 'Cant use HER with dense reward'
-    obs_converter = CarlaObservationConverter(h=84, w=84, rel_coord_system=config.rel_coord_system)
-    action_converter = CarlaActionsConverter(config.action_type)
+    obs_converter = CarlaObservationsConverter(h=84, w=84, rel_coord_system=config.rel_coord_system)
+    if config.action_type == 'carla-original':
+        action_converter = DiscreteActionsConverter()
+    else:
+        action_converter = ContinuousTBSActionsConverter()
+
     envs = make_vec_envs(obs_converter, action_converter, args.starting_port, config.seed, config.num_processes,
                          config.gamma, device, config.reward_class, num_frame_stack=1, subset=config.experiments_subset,
                          norm_reward=norm_reward, norm_obs=norm_obs, apply_her=config.num_virtual_goals > 0,
@@ -113,7 +120,7 @@ def main():
     if config.agent == 'forward':
         agent = rl_agents.ForwardCarla()
 
-    if config.agent == 'a2c':
+    elif config.agent == 'a2c':
         agent = rl_agents.A2CCarla(obs_converter,
                                    action_converter,
                                    config.value_loss_coef,
@@ -270,7 +277,7 @@ def main():
                         obs, eval_recurrent_hidden_states, eval_masks, deterministic=True)
 
                 # Obser reward and next obs
-                carla_obs, reward, done, infos = eval_envs.step(action)
+                obs, reward, done, infos = eval_envs.step(action)
 
                 eval_masks = torch.FloatTensor([[0.0] if done_ else [1.0]
                                                 for done_ in done])

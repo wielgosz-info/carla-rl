@@ -239,19 +239,24 @@ class CarlaAVEnv(gym.Env):
             self._collision_sensor.destroy()
             self._collision_sensor = None
 
-        for sensor in self._sensors:
-            sensor.stop()
-            sensor.destroy()
-        self._sensors = []
+        try:
+            for sensor in self._sensors:
+                sensor.stop()
+                sensor.destroy()
 
-        self._client.apply_batch([command.DestroyActor(x) for x in [self._ego_vehicle] + self._other_vehicles])
+            self._client.apply_batch([command.DestroyActor(x) for x in [self._ego_vehicle] + self._other_vehicles])
+
+            for i in range(0, len(self._pedestrians, 2)):
+                self._pedestrians[i].stop()
+            self._client.apply_batch([command.DestroyActor(x['id']) for x in self._pedestrians] +
+                                     [command.DestroyActor(x['con']) for x in self._pedestrians])
+        except Exception as e:
+            self.logger.debug('Error when destroying actors')
+            self.logger.error(e)
+
+        self._sensors = []
         self._ego_vehicle = None
         self._other_vehicles = []
-
-        for i in range(0, len(self._pedestrians, 2)):
-            self._pedestrians[i].stop()
-        self._client.apply_batch([command.DestroyActor(x['id']) for x in self._pedestrians] +
-                                 [command.DestroyActor(x['con']) for x in self._pedestrians])
         self._pedestrians = []
 
     def _raster_frame(self, sensor_data, snapshot, directions, obs):

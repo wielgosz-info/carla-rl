@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 import gym
 
+
 class CameraException(Exception):
 
     def __init__(self, id):
@@ -9,7 +10,7 @@ class CameraException(Exception):
         self.id = id
 
 
-class CarlaObservationConverter(object):
+class CarlaObservationsConverter(object):
 
     def __init__(self, h=84, w=84, rel_coord_system=False):
 
@@ -41,9 +42,9 @@ class CarlaObservationConverter(object):
 
         else:
             self.vbounds = np.array([
-                [0, 100], # TODO: Fine-tune
-                [0, 100], # TODO: Fine-tune
-                [0, 100], # TODO: Fine-tune
+                [0, 100],  # TODO: Fine-tune
+                [0, 100],  # TODO: Fine-tune
+                [0, 100],  # TODO: Fine-tune
                 [0, 30],
                 [-100, 100],
                 [-100, 100],
@@ -52,13 +53,13 @@ class CarlaObservationConverter(object):
                 [0, 1],
                 [0, 1],
                 [0, 1],
-                [0, 100], # TODO: Fine-tune
-                [0, 100], # TODO: Fine-tune
-                [0, 100], # TODO: Fine-tune
-                [0, 100], # TODO: Fine-tune
-                [0, 100], # TODO: Fine-tune
-                [0, 100], # TODO: Fine-tune
-                [0, 100], # TODO: Fine-tune
+                [0, 100],  # TODO: Fine-tune
+                [0, 100],  # TODO: Fine-tune
+                [0, 100],  # TODO: Fine-tune
+                [0, 100],  # TODO: Fine-tune
+                [0, 100],  # TODO: Fine-tune
+                [0, 100],  # TODO: Fine-tune
+                [0, 100],  # TODO: Fine-tune
                 [0, 100]  # TODO: Fine-tune
             ])
 
@@ -88,11 +89,11 @@ class CarlaObservationConverter(object):
 
         if self.rel_coord_system:
             target_rel_x, target_rel_y = self.get_relative_location_target(
-                                        player_measurements.transform.location.x,
-                                        player_measurements.transform.location.y,
-                                        player_measurements.transform.rotation.yaw,
-                                        target.location.x,
-                                        target.location.y,)
+                player_measurements.transform.location.x,
+                player_measurements.transform.location.y,
+                player_measurements.transform.rotation.yaw,
+                target.location.x,
+                target.location.y,)
             target_rel_norm = np.linalg.norm(np.array([target_rel_x, target_rel_y]))
             target_rel_x_unit = target_rel_x / target_rel_norm
             target_rel_y_unit = target_rel_y / target_rel_norm
@@ -152,7 +153,6 @@ class CarlaObservationConverter(object):
         else:
             return {'img': img, 'v': v}
 
-
     def get_relative_location_target(self, loc_x, loc_y, loc_yaw, target_x, target_y):
 
         veh_yaw = loc_yaw * np.pi / 180
@@ -167,7 +167,6 @@ class CarlaObservationConverter(object):
         target_location_rel_y = np.linalg.norm(d_world) * np.sin(rel_angle)
 
         return target_location_rel_x.item(), target_location_rel_y.item()
-
 
     def get_observation_space(self):
 
