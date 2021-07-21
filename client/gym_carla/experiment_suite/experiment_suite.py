@@ -11,6 +11,7 @@
 # but working with CARLA 0.9.11 and gym
 
 import abc
+from gym_carla.converters.observations.sensors.camera.rgb import RGBCameraSensorObservations
 from carla import Transform, Location, Rotation
 
 
@@ -82,7 +83,7 @@ class ExperimentSuite(object):
             rotation=Rotation(-15.0, 0, 0)
         )
 
-        return (blueprint_camera, transform_camera)
+        return (blueprint_camera, transform_camera, RGBCameraSensorObservations)
 
     @property
     def dynamic_tasks(self):

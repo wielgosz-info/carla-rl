@@ -12,8 +12,8 @@
 
 from carla import WeatherParameters
 
-from gym_carla.benchmark_tools.experiment import Experiment
-from gym_carla.benchmark_tools.experiment_suite import ExperimentSuite
+from gym_carla.experiment_suite.experiment import Experiment
+from gym_carla.experiment_suite.experiment_suite import ExperimentSuite
 
 
 class BasicExperimentSuite(ExperimentSuite):

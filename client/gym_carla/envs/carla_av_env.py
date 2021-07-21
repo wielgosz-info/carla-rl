@@ -1,7 +1,7 @@
 import os
 import time
 
-import gym_carla.experiment_suites as experiment_suites
+import gym_carla.example_suites as experiment_suites
 import cv2
 import gym
 import numpy as np
@@ -14,15 +14,14 @@ from agents.navigation.global_route_planner_dao import GlobalRoutePlannerDAO
 from agents.tools.misc import compute_distance
 from carla import Client, VehicleControl, WorldSettings, Transform, WorldSnapshot, command
 from carla_logger import get_carla_logger
-from observation_utils import CameraException
 
 
 class CarlaAVEnv(gym.Env):
-    '''
+    """
         An OpenAI Gym Environment for Autonomous Vehicles in CARLA.
         This environment expects RLAgents to return actions that can be directly mapped to VehicleControl.
         The environment that is going to utilize VehiclePIDContoller is planned for the future.
-    '''
+    """
 
     def __init__(self,
                  obs_converter,
@@ -47,11 +46,16 @@ class CarlaAVEnv(gym.Env):
         self.id = env_id
 
         self._obs_converter = obs_converter
-        self.observation_space = obs_converter.get_observation_space()
+        self.observation_space = self._obs_converter.get_observation_space()
         self._action_converter = action_converter
         self.action_space = self._action_converter.get_action_space()
 
         self._city_name = city_name
+
+        # TODO: experiment suite should be a param (or a separate env if there is a lot of logic involved),
+        # not this kind of weird switch...
+        # or rather - benchmarking a suite is a different thing than using a suite for training,
+        # but every suite can potentially be used in both settings
         if benchmark:
             self._experiment_suite = getattr(experiment_suites, exp_suite_name)(self._city_name)
         else:
@@ -68,13 +72,14 @@ class CarlaAVEnv(gym.Env):
         )
         self._dao = None  # Needs to be reset after new world is loaded
         self._planner = None  # Needs DAO
-        self._collision_sensor = None
-        self._sensors = []  # Sensors available to Vehicle
+        self._env_sensors = {}  # Sensors needed to manage env/generate observations
+        self._vehicle_sensors = {}  # Sensors available to Vehicle
         self._other_vehicles = []
         self._pedestrians = []
         self._ego_vehicle = None
 
         self._make_carla_client(host, port)
+        self._sensor_definitions = self._experiment_suite.prepare_sensors(self._world.get_blueprint_library())
 
         self._distance_for_success = distance_for_success
 
@@ -234,13 +239,12 @@ class CarlaAVEnv(gym.Env):
                 self.logger.error(e)
             self.video_writer = None
 
-        if self._collision_sensor is not None:
-            self._collision_sensor.stop()
-            self._collision_sensor.destroy()
-            self._collision_sensor = None
-
         try:
-            for sensor in self._sensors:
+            for sensor in self._env_sensors.values():
+                sensor.stop()
+                sensor.destroy()
+
+            for sensor in self._vehicle_sensors.values():
                 sensor.stop()
                 sensor.destroy()
 
@@ -250,11 +254,12 @@ class CarlaAVEnv(gym.Env):
                 self._pedestrians[i].stop()
             self._client.apply_batch([command.DestroyActor(x['id']) for x in self._pedestrians] +
                                      [command.DestroyActor(x['con']) for x in self._pedestrians])
-        except Exception as e:
+        except RuntimeError as e:
             self.logger.debug('Error when destroying actors')
             self.logger.error(e)
 
-        self._sensors = []
+        self._env_sensors = {}
+        self._vehicle_sensors = {}
         self._ego_vehicle = None
         self._other_vehicles = []
         self._pedestrians = []
@@ -384,17 +389,16 @@ class CarlaAVEnv(gym.Env):
         )
 
         # attach collision sensor
-        self._collision_sensor = self._world.spawn_actor(
+        self._env_sensors['collision'] = self._world.spawn_actor(
             blueprint_library.find("sensor.other.collision"),
             Transform(),
             attach_to=self._ego_vehicle
         )
 
         # attach other sensors, as defined in experiment
-        self._sensors = []
-        sensors = self._experiment_suite.prepare_sensors(blueprint_library)
-        for (blueprint, transform) in sensors:
-            self._sensors.append(self._world.spawn_actor(blueprint, transform, attach_to=self._ego_vehicle))
+        self._vehicle_sensors = {}
+        for (blueprint, transform, id) in self._sensor_definitions:
+            self._vehicle_sensors[id] = self._world.spawn_actor(blueprint, transform, attach_to=self._ego_vehicle)
 
         # add other vehicles according to experiment settings
         self._other_vehicles = self._spawn_other_vehicles(
@@ -427,12 +431,12 @@ class CarlaAVEnv(gym.Env):
         self.num_episodes += 1
 
     def _spawn_other_vehicles(self, positions, blueprints, number_of_vehicles, traffic_manager):
-        '''
+        """
         Spawn Vehicles
 
         From https://github.com/carla-simulator/carla/blob/master/PythonAPI/examples/spawn_npc.py,
         with lights removed for now
-        '''
+        """
         vehicles_list = []
         batch = []
         for transform in random.sample(positions, k=number_of_vehicles):
@@ -483,11 +487,11 @@ class CarlaAVEnv(gym.Env):
                        percentage_pedestrians_running=0.0,  # how many pedestrians will run
                        percentage_pedestrians_crossing=0.0  # how many pedestrians will walk through the road
                        ):
-        '''
+        """
         Spawn Walkers
 
         From https://github.com/carla-simulator/carla/blob/master/PythonAPI/examples/spawn_npc.py
-        '''
+        """
 
         all_id = []
         walkers_list = []

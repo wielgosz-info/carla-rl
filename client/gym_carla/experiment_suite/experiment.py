@@ -52,7 +52,7 @@ class Experiment(object):
 
     @property
     def poses(self):
-        '''
+        """
         Poses is a list of pairs of integers.
         Each pair defines starting (0) and stopping (1) point for the experiment.
         The int value is an index of the spawn point on the list returned from
@@ -65,7 +65,7 @@ class Experiment(object):
         Each task can have multiple poses, e.g. there can be multiple combinations
         of start/stop points that will yield desired environment. Imagine taking
         the map and finding all places where vehicle can turn left.
-        '''
+        """
         return self._poses
 
     @property

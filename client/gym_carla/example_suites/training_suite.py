@@ -1,5 +1,5 @@
-from gym_carla.experiment_suites.corl_2017 import CoRL2017
-from gym_carla.benchmark_tools.experiment import Experiment
+from gym_carla.example_suites.corl_2017 import CoRL2017
+from gym_carla.experiment_suite.experiment import Experiment
 
 
 class TrainingSuite(CoRL2017):

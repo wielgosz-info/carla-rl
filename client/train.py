@@ -1,4 +1,12 @@
 import datetime
+from gym_carla.converters.observations.directions_observations import DirectionsObservations
+from gym_carla.converters.observations.sensors.other.collision_observations import CollisionSensorObservations
+from gym_carla.converters.observations.sensors.other.lane_invasion_observations import LaneInvasionSensorObservations
+from gym_carla.converters.observations.target_observations import TargetObservations
+from gym_carla.converters.observations.world_position_observations import WorldPositionObservations
+from gym_carla.converters.observations.ego_vehicle_observations import EgoVehicleObservations
+from gym_carla.converters.observations.sensors.camera.rgb import RGBCameraSensorObservations
+from typing import OrderedDict
 from gym_carla.converters.actions.discrete import DiscreteActionsConverter
 from gym_carla.converters.actions.continuous_tbs import ContinuousTBSActionsConverter
 import os
@@ -106,7 +114,33 @@ def main():
 
     assert not (config.num_virtual_goals > 0) or (config.reward_class ==
                                                   'SparseReward'), 'Cant use HER with dense reward'
+
     obs_converter = CarlaObservationsConverter(h=84, w=84, rel_coord_system=config.rel_coord_system)
+
+    obs_converter_items = OrderedDict({
+        'img': RGBCameraSensorObservations(h=84, w=84),
+    })
+
+    if config.rel_coord_system:
+        obs_converter_items['v'] = [
+            EgoVehicleObservations(),
+            DirectionsObservations(),
+            # TODO: verify neither CollisionSensorObservations nor LaneInvasionSensorObservations here?,
+            TargetObservations(rel_coord_system=True)
+        ]
+        obs_converter_items['world_pos'] = WorldPositionObservations()
+    else:
+        obs_converter_items['v'] = [
+            WorldPositionObservations(),
+            EgoVehicleObservations(),
+            DirectionsObservations(),
+            CollisionSensorObservations(),
+            LaneInvasionSensorObservations(),
+            TargetObservations(rel_coord_system=False)
+        ]
+
+    obs_converter = ObservationsConverter(obs_converter_items)
+
     if config.action_type == 'carla-original':
         action_converter = DiscreteActionsConverter()
     else:

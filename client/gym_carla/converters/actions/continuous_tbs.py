@@ -6,25 +6,22 @@ from carla import VehicleControl
 
 
 class ContinuousTBSActionsConverter(ActionsConverter):
-    '''
+    """
     Converter for continuous Throttle, Brake, Steer actions
-    '''
+    """
 
     def __init__(self):
-        self.__limits = OrderedDict(
+        super().__init__()
+        self._bounds = OrderedDict(
             throttle=[0.0, 1.0],
             brake=[0.0, 1.0],
             steer=[-1.0, 1.0]
         )
 
-    def get_action_space(self):
-        low, high = zip(*self.__limits.values())
-        return gym.spaces.Box(low=np.array(low), high=np.array(high), dtype=np.float32)
-
-    def action_to_control(self, action, last_ego_vehicle_snapshot=None):
+    def action_to_control(self, action, ego_vehicle_snapshot=None):
         control = VehicleControl()
 
-        for idx, (key, limits) in enumerate(self.__limits.items()):
-            setattr(control, key, min(limits[1], max(limits[0], action[idx])))
+        for idx, (key, bounds) in enumerate(self._bounds.items()):
+            setattr(control, key, min(bounds[1], max(bounds[0], action[idx])))
 
         return control
