@@ -7,6 +7,7 @@ import cv2
 import gym
 import numpy as np
 import skvideo.io
+import queue
 
 from agents.navigation.global_route_planner import GlobalRoutePlanner
 from agents.navigation.global_route_planner_dao import GlobalRoutePlannerDAO
@@ -44,7 +45,9 @@ class CarlaAVEnv(gym.Env):
                  video_every=100,
                  video_dir='./video/',
                  distance_for_success=2.0,
-                 benchmark=False):
+                 benchmark=False,
+                 wait_for_data_timeout=1.0
+                 ):
 
         self.logger = get_carla_logger()
         self.logger.info('Environment {} running in port {}'.format(env_id, port))
@@ -75,12 +78,19 @@ class CarlaAVEnv(gym.Env):
         self._world = None
         self._world_settings = WorldSettings(
             synchronous_mode=True,
-            fixed_delta_seconds=0.1  # 10 FPS
+            fixed_delta_seconds=0.05,  # 20 FPS; fixed_delta_seconds <= max_substep_delta_time * max_substeps
+            substepping=True,
+            max_substep_delta_time=0.01,
+            max_substeps=10
         )
+
         self._dao = None  # Needs to be reset after new world is loaded
         self._planner = None  # Needs DAO
         self._env_sensors = {}  # Sensors needed to manage env/generate observations
         self._vehicle_sensors = {}  # Sensors available to Vehicle
+        self._sensors_buffer = {}
+        self._wait_for_data_timeout = wait_for_data_timeout
+
         self._other_vehicles = []
         self._pedestrians = []
         self._ego_vehicle = None
@@ -124,6 +134,50 @@ class CarlaAVEnv(gym.Env):
         self.steps = 0
         self.num_episodes = 0
 
+    def _prepare_sensors_buffer(self):
+        # based on https://github.com/carla-simulator/carla/blob/master/PythonAPI/examples/synchronous_mode.py
+        buffer = OrderedDict()
+
+        def make_queue(key, register_event):
+            data_queue = queue.Queue()
+            register_event(data_queue.put)
+            buffer[key] = data_queue
+
+        for key, sensor in self._vehicle_sensors.items():
+            make_queue(key, sensor.listen)
+
+        for key, sensor in self._env_sensors.items():
+            make_queue(key, sensor.listen)
+
+        make_queue('world_snapshot', self._world.on_tick)
+
+        return buffer
+
+    def _get_data_from_buffer(self, key, frame):
+        # based on https://github.com/carla-simulator/carla/blob/master/PythonAPI/examples/synchronous_mode.py
+        try:
+            while True:
+                data = self._sensors_buffer[key].get(timeout=self._wait_for_data_timeout)
+                if data.frame == frame:
+                    return data
+        except queue.Empty:
+            return None
+
+    def _tick_the_world(self):
+        # based on https://github.com/carla-simulator/carla/blob/master/PythonAPI/examples/synchronous_mode.py
+        frame = self._world.tick()
+
+        # some sensors (like collision or lane_invasion) will return no data!
+        return (
+            self._get_data_from_buffer('world_snapshot', frame),
+            {
+                k: self._get_data_from_buffer(k, frame) for k in self._env_sensors.keys()
+            },
+            {
+                k: self._get_data_from_buffer(k, frame) for k in self._vehicle_sensors.keys()
+            },
+        )
+
     def step(self, action):
 
         if self.done:
@@ -134,10 +188,11 @@ class CarlaAVEnv(gym.Env):
             try:
                 # Send control
                 control = self._action_converter.action_to_control(action, self.last_snapshot)
-                self._client.send_control(control)
+                self._ego_vehicle.apply_control(control)
 
-                # Gather the observations (including snapshot, sensor and directions)
-                snapshot = self._world.get_snapshot()
+                # Move the simulation forward & get the observations
+                snapshot, env_sensors_snapshot, vehicle_sensors_snapshot = self._tick_the_world()
+
                 self.last_snapshot = snapshot
                 current_timestamp = snapshot.timestamp
 
@@ -150,8 +205,8 @@ class CarlaAVEnv(gym.Env):
 
                 obs = self._obs_converter.convert(
                     snapshot.find(self._ego_vehicle.id),
-                    self.vehicle_sensors_snapshot,
-                    self.env_sensors_snapshot,
+                    vehicle_sensors_snapshot,
+                    env_sensors_snapshot,
                     directions,
                     self._target,
                     self.id
@@ -220,8 +275,8 @@ class CarlaAVEnv(gym.Env):
                 # Hack: Try sleeping so that the server is ready. Reduces the number of TCPErrors
                 time.sleep(4)
 
-                self._ego_vehicle.apply_control(VehicleControl())
-                snapshot = self._world.get_snapshot()
+                # Move the simulation forward & get the observations
+                snapshot, env_sensors_snapshot, vehicle_sensors_snapshot = self._tick_the_world()
 
                 self._initial_timestamp = snapshot.timestamp
                 self.last_snapshot = snapshot
@@ -230,7 +285,14 @@ class CarlaAVEnv(gym.Env):
                 directions = self._get_directions(snapshot, self._target)
                 self.last_direction = directions
 
-                obs = self._obs_converter.convert(snapshot, sensor_data, directions, self._target, self.id)
+                obs = self._obs_converter.convert(
+                    snapshot.find(self._ego_vehicle.id),
+                    vehicle_sensors_snapshot,
+                    env_sensors_snapshot,
+                    directions,
+                    self._target,
+                    self.id
+                )
                 self.last_obs = obs
                 self.done = False
                 self._success = False
@@ -407,6 +469,7 @@ class CarlaAVEnv(gym.Env):
             blueprints_vehicles[0],
             positions[start_index]
         )
+        self._ego_vehicle.apply_control(VehicleControl())
 
         # TODO: attach all of those sensors in batch via commands?
         self._env_sensors = {}
@@ -419,6 +482,9 @@ class CarlaAVEnv(gym.Env):
         for sensor_id, (blueprint, transform) in self._vehicle_sensor_definitions.items():
             self._vehicle_sensors[sensor_id] = self._world.spawn_actor(
                 blueprint, transform, attach_to=self._ego_vehicle)
+
+        # reset sensor buffers
+        self._prepare_sensors_buffer()
 
         # add other vehicles according to experiment settings
         self._other_vehicles = self._spawn_other_vehicles(
@@ -628,13 +694,3 @@ class CarlaAVEnv(gym.Env):
                 self.logger.debug('Got RuntimeError... sleeping for 1')
                 self.logger.error(error)
                 time.sleep(1)
-
-    @property
-    def vehicle_sensors_snapshot(self):
-        return {
-
-        }
-
-    @property
-    def env_sensors_snapshot(self):
-        return {}
