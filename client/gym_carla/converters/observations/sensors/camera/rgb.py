@@ -14,13 +14,13 @@ class RGBCameraSensorException(Exception):
 
 
 class RGBCameraSensorObservations(Observations):
-    def __init__(self, h=84, w=84, id='rgb_camera') -> None:
+    def __init__(self, h=84, w=84, sensor_id='rgb_camera') -> None:
         super().__init__()
 
         self.__h = h
         self.__w = w
         self.__c = 3
-        self.__id = id
+        self.__sensor_id = sensor_id
 
     def get_observation_space(self) -> gym.spaces.Space:
         img_shape = (self.__c, self.__h, self.__w)
@@ -35,7 +35,7 @@ class RGBCameraSensorObservations(Observations):
                              target: Transform,
                              env_id) -> np.ndarray:
         try:
-            img = cv2.resize(vehicle_sensors[self.__id].raw_data, (self.__h, self.__w)) / 255.0
+            img = cv2.resize(vehicle_sensors[self.__sensor_id].raw_data, (self.__h, self.__w)) / 255.0
         except:
             raise RGBCameraSensorException(env_id)
         img = np.transpose(img, (2, 0, 1))

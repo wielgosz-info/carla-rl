@@ -1,18 +1,9 @@
 import datetime
-from gym_carla.converters.observations.directions_observations import DirectionsObservations
-from gym_carla.converters.observations.sensors.other.collision_observations import CollisionSensorObservations
-from gym_carla.converters.observations.sensors.other.lane_invasion_observations import LaneInvasionSensorObservations
-from gym_carla.converters.observations.target_observations import TargetObservations
-from gym_carla.converters.observations.world_position_observations import WorldPositionObservations
-from gym_carla.converters.observations.ego_vehicle_observations import EgoVehicleObservations
-from gym_carla.converters.observations.sensors.camera.rgb import RGBCameraSensorObservations
-from typing import OrderedDict
-from gym_carla.converters.actions.discrete import DiscreteActionsConverter
-from gym_carla.converters.actions.continuous_tbs import ContinuousTBSActionsConverter
 import os
 import shutil
 import time
 from collections import namedtuple
+from typing import OrderedDict
 
 import numpy as np
 import torch
@@ -23,9 +14,25 @@ import rl_agents
 from arguments import get_args
 from carla_logger import setup_carla_logger
 from envs_manager import make_vec_envs
-from gym_carla.converters.actions_converter import CarlaActionsConverter
-from gym_carla.converters.observations_converter import \
-    CarlaObservationsConverter
+from gym_carla.converters.actions.continuous_tbs import \
+    ContinuousTBSActionsConverter
+from gym_carla.converters.actions.discrete import DiscreteActionsConverter
+from gym_carla.converters.observations.directions_observations import \
+    DirectionsObservations
+from gym_carla.converters.observations.ego_vehicle_observations import \
+    EgoVehicleObservations
+from gym_carla.converters.observations.observations_converter import \
+    ObservationsConverter
+from gym_carla.converters.observations.sensors.camera.rgb import \
+    RGBCameraSensorObservations
+from gym_carla.converters.observations.sensors.other.collision_observations import \
+    CollisionSensorObservations
+from gym_carla.converters.observations.sensors.other.lane_invasion_observations import \
+    LaneInvasionSensorObservations
+from gym_carla.converters.observations.target_observations import \
+    TargetObservations
+from gym_carla.converters.observations.world_position_observations import \
+    WorldPositionObservations
 from storage import RolloutStorage
 from utils import get_vec_normalize, load_modules, save_modules
 from vec_env.util import dict_to_obs, obs_to_dict
@@ -114,8 +121,6 @@ def main():
 
     assert not (config.num_virtual_goals > 0) or (config.reward_class ==
                                                   'SparseReward'), 'Cant use HER with dense reward'
-
-    obs_converter = CarlaObservationsConverter(h=84, w=84, rel_coord_system=config.rel_coord_system)
 
     obs_converter_items = OrderedDict({
         'img': RGBCameraSensorObservations(h=84, w=84),

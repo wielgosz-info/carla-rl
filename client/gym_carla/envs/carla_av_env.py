@@ -1,3 +1,5 @@
+from agents.navigation.local_planner import RoadOption
+from gym_carla.converters.observations.sensors.camera.rgb import RGBCameraSensorException
 import os
 import random
 import time
@@ -12,8 +14,8 @@ import queue
 from agents.navigation.global_route_planner import GlobalRoutePlanner
 from agents.navigation.global_route_planner_dao import GlobalRoutePlannerDAO
 from agents.tools.misc import compute_distance
-from carla import (Client, Transform, VehicleControl, WorldSettings,
-                   WorldSnapshot, command)
+from carla import (Client, LaneChange, LaneMarkingType, Transform, VehicleControl,
+                   WorldSettings, WorldSnapshot, command)
 
 import rewards
 from carla_logger import get_carla_logger
@@ -94,6 +96,9 @@ class CarlaAVEnv(gym.Env):
         self._other_vehicles = []
         self._pedestrians = []
         self._ego_vehicle = None
+        self._time_out = None
+        self._episode_name = None
+        self._target = None
 
         self._make_carla_client(host, port)
 
@@ -155,11 +160,20 @@ class CarlaAVEnv(gym.Env):
 
     def _get_data_from_buffer(self, key, frame):
         # based on https://github.com/carla-simulator/carla/blob/master/PythonAPI/examples/synchronous_mode.py
+        # but in case of event-based sensors there can be none or multiple data per frame
         try:
             while True:
                 data = self._sensors_buffer[key].get(timeout=self._wait_for_data_timeout)
                 if data.frame == frame:
-                    return data
+                    # this was the only thing in queue
+                    if self._sensors_buffer[key].empty():
+                        return data
+                    else:
+                        seq = [data]
+                        while not self._sensors_buffer[key].empty():
+                            # this should never timeout
+                            seq.append(self._sensors_buffer[key].get(timeout=self._wait_for_data_timeout))
+                        return seq
         except queue.Empty:
             return None
 
@@ -191,20 +205,20 @@ class CarlaAVEnv(gym.Env):
                 self._ego_vehicle.apply_control(control)
 
                 # Move the simulation forward & get the observations
-                snapshot, env_sensors_snapshot, vehicle_sensors_snapshot = self._tick_the_world()
+                world_snapshot, env_sensors_snapshot, vehicle_sensors_snapshot = self._tick_the_world()
 
-                self.last_snapshot = snapshot
-                current_timestamp = snapshot.timestamp
+                self.last_snapshot = world_snapshot
+                current_timestamp = world_snapshot.timestamp
 
-                distance_to_goal = self._get_distance_to_goal(snapshot, self._target)
+                distance_to_goal = self._get_distance_to_goal(world_snapshot, self._target)
                 self.last_distance_to_goal = distance_to_goal
 
-                directions = self._get_directions(snapshot,
+                directions = self._get_directions(world_snapshot,
                                                   self._target)
                 self.last_direction = directions
 
                 obs = self._obs_converter.convert(
-                    snapshot.find(self._ego_vehicle.id),
+                    world_snapshot.find(self._ego_vehicle.id),
                     vehicle_sensors_snapshot,
                     env_sensors_snapshot,
                     directions,
@@ -213,11 +227,11 @@ class CarlaAVEnv(gym.Env):
                 )
 
                 if self.video_writer is not None and self.steps % 2 == 0:
-                    self._raster_frame(sensor_data, snapshot, directions, obs)
+                    self._raster_frame(vehicle_sensors_snapshot, world_snapshot, directions, obs)
 
                 self.last_obs = obs
 
-            except CameraException:
+            except RGBCameraSensorException:
                 self.logger.debug('Camera Exception in step()')
                 obs = self.last_obs
                 distance_to_goal = self.last_distance_to_goal
@@ -232,7 +246,7 @@ class CarlaAVEnv(gym.Env):
 
         # Check if terminal state
         timeout = (current_timestamp.elapsed_seconds - self._initial_timestamp.elapsed_seconds) > self._time_out
-        collision, _ = self._is_collision(snapshot)
+        collision, _ = self._is_collision(env_sensors_snapshot)
         success = distance_to_goal < self._distance_for_success
         if timeout:
             self.logger.debug('Timeout')
@@ -246,7 +260,7 @@ class CarlaAVEnv(gym.Env):
 
         # Get the reward
         env_state = {'timeout': timeout, 'collision': collision, 'success': success}
-        reward = self._reward.get_reward(snapshot, self._target, self.last_direction, control, env_state)
+        reward = self._reward.get_reward(world_snapshot, self._target, self.last_direction, control, env_state)
 
         # Additional information
         info = {'carla-reward': reward}
@@ -276,17 +290,17 @@ class CarlaAVEnv(gym.Env):
                 time.sleep(4)
 
                 # Move the simulation forward & get the observations
-                snapshot, env_sensors_snapshot, vehicle_sensors_snapshot = self._tick_the_world()
+                world_snapshot, env_sensors_snapshot, vehicle_sensors_snapshot = self._tick_the_world()
 
-                self._initial_timestamp = snapshot.timestamp
-                self.last_snapshot = snapshot
-                self.last_distance_to_goal = self._get_distance_to_goal(snapshot, self._target)
+                self._initial_timestamp = world_snapshot.timestamp
+                self.last_snapshot = world_snapshot
+                self.last_distance_to_goal = self._get_distance_to_goal(world_snapshot, self._target)
 
-                directions = self._get_directions(snapshot, self._target)
+                directions = self._get_directions(world_snapshot, self._target)
                 self.last_direction = directions
 
                 obs = self._obs_converter.convert(
-                    snapshot.find(self._ego_vehicle.id),
+                    world_snapshot.find(self._ego_vehicle.id),
                     vehicle_sensors_snapshot,
                     env_sensors_snapshot,
                     directions,
@@ -300,7 +314,7 @@ class CarlaAVEnv(gym.Env):
                 self._failure_collision = False
                 return obs
 
-            except CameraException:
+            except RGBCameraSensorException:
                 self.logger.debug('Camera Exception in reset()')
                 continue
 
@@ -346,9 +360,9 @@ class CarlaAVEnv(gym.Env):
         self._other_vehicles = []
         self._pedestrians = []
 
-    def _raster_frame(self, sensor_data, snapshot, directions, obs):
+    def _raster_frame(self, vehicle_sensors_snapshot, world_snapshot, directions, obs):
+        frame = obs['img'].copy()
 
-        frame = sensor_data['CameraRGB'].data.copy()
         cv2.putText(frame, text='Episode number: {:,}'.format(self.num_episodes-1),
                     org=(50, 50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.0,
                     color=[0, 0, 0], thickness=2)
@@ -356,27 +370,23 @@ class CarlaAVEnv(gym.Env):
                     org=(50, 80), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.0,
                     color=[0, 0, 0], thickness=2)
 
-        REACH_GOAL = 0.0
-        GO_STRAIGHT = 5.0
-        TURN_RIGHT = 4.0
-        TURN_LEFT = 3.0
-        LANE_FOLLOW = 2.0
-        if np.isclose(directions, REACH_GOAL):
-            dir_str = 'REACH GOAL'
-        elif np.isclose(directions, GO_STRAIGHT):
+        # if np.isclose(directions, REACH_GOAL):
+        #     dir_str = 'REACH GOAL'
+        # el
+        dir_str = 'Unknown'
+        if directions == RoadOption.STRAIGHT:
             dir_str = 'GO STRAIGHT'
-        elif np.isclose(directions, TURN_RIGHT):
+        elif directions == RoadOption.RIGHT:
             dir_str = 'TURN RIGHT'
-        elif np.isclose(directions, TURN_LEFT):
+        elif directions == RoadOption.LEFT:
             dir_str = 'TURN LEFT'
-        elif np.isclose(directions, LANE_FOLLOW):
+        elif directions == RoadOption.LANEFOLLOW:
             dir_str = 'LANE FOLLOW'
-        else:
-            raise ValueError(directions)
+
         cv2.putText(frame, text='Direction: {}'.format(dir_str),
                     org=(50, 110), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.0,
                     color=[0, 0, 0], thickness=2)
-        cv2.putText(frame, text='Speed: {:.02f}'.format(snapshot.player_snapshot.forward_speed * 3.6),
+        cv2.putText(frame, text='Speed: {:.02f}'.format(world_snapshot.player_snapshot.forward_speed * 3.6),
                     org=(50, 140), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.0,
                     color=[0, 0, 0], thickness=2)
         cv2.putText(frame, text='rel_x: {:.02f}, rel_y: {:.02f}'.format(obs['v'][-2].item(), obs['v'][-1].item()),
@@ -384,9 +394,9 @@ class CarlaAVEnv(gym.Env):
                     color=[0, 0, 0], thickness=2)
         self.video_writer.writeFrame(frame)
 
-    def _get_distance_to_goal(self, snapshot: WorldSnapshot, target: Transform):
+    def _get_distance_to_goal(self, world_snapshot: WorldSnapshot, target: Transform):
         distance_to_goal = compute_distance(
-            snapshot.find(self._ego_vehicle.id).get_transform().location,
+            world_snapshot.find(self._ego_vehicle.id).get_transform().location,
             target.location
         )
         return distance_to_goal
@@ -652,9 +662,9 @@ class CarlaAVEnv(gym.Env):
 
         return walkers_list
 
-    def _get_directions(self, snapshot: WorldSnapshot, end_point: Transform):
+    def _get_directions(self, world_snapshot: WorldSnapshot, end_point: Transform):
         directions = self._planner.abstract_route_plan(
-            snapshot.find(self._ego_vehicle.id).get_transform().location,
+            world_snapshot.find(self._ego_vehicle.id).get_transform().location,
             end_point.location
         )
         return directions[0]
@@ -666,18 +676,33 @@ class CarlaAVEnv(gym.Env):
         return len(route) * self._dao.get_resolution()
 
     @ staticmethod
-    def _is_collision(snapshot):
+    def _is_collision(env_sensors_snapshot):
 
-        c = 0
-        c += snapshot.player_snapshot.collision_vehicles
-        c += snapshot.player_snapshot.collision_pedestrians
-        c += snapshot.player_snapshot.collision_other
+        collisions = []
+        if env_sensors_snapshot['collision'] is not None:
+            if isinstance(env_sensors_snapshot['collision'], list):
+                collisions = env_sensors_snapshot['collision']
+            else:
+                collisions = [env_sensors_snapshot['collision']]
 
-        sidewalk_intersection = snapshot.player_snapshot.intersection_offroad
+        invasions = []
+        if env_sensors_snapshot['lane_invasion'] is not None:
+            if isinstance(env_sensors_snapshot['lane_invasion'], list):
+                invasions = [].extend(
+                    [invasion.crossed_lane_markings for invasion in env_sensors_snapshot['lane_invasion']])
+            else:
+                invasions = env_sensors_snapshot['lane_invasion'].crossed_lane_markings
 
-        otherlane_intersection = snapshot.player_snapshot.intersection_otherlane
+        # no way to get those in new CARLA?: intersection_offroad, intersection_otherlane
+        # let just count the invasions... TODO: should LaneMarkingType.BrokenSolid count?
+        invasions = [inv for inv in invasions
+                     if inv.lane_change == LaneChange.NONE]
+        invasions_curb_or_grass = [inv for inv in invasions
+                                   if inv.type in [LaneMarkingType.Grass, LaneMarkingType.Curb]]
+        invasions_solid = [inv for inv in invasions
+                           if inv.type in [LaneMarkingType.Solid, LaneMarkingType.SolidSolid, LaneMarkingType.SolidBroken, LaneMarkingType.BrokenSolid]]
 
-        return (c > 1e-9) or (sidewalk_intersection > 0.01) or (otherlane_intersection > 0.9), c
+        return len(collisions) or len(invasions_curb_or_grass) or len(invasions_solid), collisions
 
     def _make_carla_client(self, host, port):
 
