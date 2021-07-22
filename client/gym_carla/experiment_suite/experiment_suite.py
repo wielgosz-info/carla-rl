@@ -11,6 +11,7 @@
 # but working with CARLA 0.9.11 and gym
 
 import abc
+from collections import OrderedDict
 from gym_carla.converters.observations.sensors.camera.rgb import RGBCameraSensorObservations
 from carla import Transform, Location, Rotation
 
@@ -67,8 +68,9 @@ class ExperimentSuite(object):
         return self._experiments
 
     def prepare_sensors(self, blueprint_library):
-        sensors = []
-        sensors.append(self._prepare_camera(blueprint_library))
+        sensors = OrderedDict(
+            rgb_camera=self._prepare_camera(blueprint_library)
+        )
         return sensors
 
     def _prepare_camera(self, blueprint_library):
@@ -83,7 +85,7 @@ class ExperimentSuite(object):
             rotation=Rotation(-15.0, 0, 0)
         )
 
-        return (blueprint_camera, transform_camera, RGBCameraSensorObservations)
+        return (blueprint_camera, transform_camera)
 
     @property
     def dynamic_tasks(self):

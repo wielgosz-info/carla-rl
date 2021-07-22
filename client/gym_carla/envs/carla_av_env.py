@@ -1,19 +1,26 @@
 import os
+import random
 import time
+from typing import OrderedDict
 
-import gym_carla.example_suites as experiment_suites
 import cv2
 import gym
 import numpy as np
-import rewards
 import skvideo.io
-import random
 
 from agents.navigation.global_route_planner import GlobalRoutePlanner
 from agents.navigation.global_route_planner_dao import GlobalRoutePlannerDAO
 from agents.tools.misc import compute_distance
-from carla import Client, VehicleControl, WorldSettings, Transform, WorldSnapshot, command
+from carla import (Client, Transform, VehicleControl, WorldSettings,
+                   WorldSnapshot, command)
+
+import rewards
 from carla_logger import get_carla_logger
+
+import gym_carla.example_suites as experiment_suites
+from gym_carla.converters.actions.actions_converter import ActionsConverter
+from gym_carla.converters.observations.observations_converter import \
+    ObservationsConverter
 
 
 class CarlaAVEnv(gym.Env):
@@ -24,8 +31,8 @@ class CarlaAVEnv(gym.Env):
     """
 
     def __init__(self,
-                 obs_converter,
-                 action_converter,
+                 obs_converter: ObservationsConverter,
+                 action_converter: ActionsConverter,
                  env_id,
                  random_seed=0,
                  exp_suite_name='TrainingSuite',
@@ -79,7 +86,13 @@ class CarlaAVEnv(gym.Env):
         self._ego_vehicle = None
 
         self._make_carla_client(host, port)
-        self._sensor_definitions = self._experiment_suite.prepare_sensors(self._world.get_blueprint_library())
+
+        blueprint_library = self._world.get_blueprint_library()
+        self._vehicle_sensor_definitions = self._experiment_suite.prepare_sensors(blueprint_library)
+        self._env_sensor_definitions = OrderedDict(
+            collision=(blueprint_library.find('sensor.other.collision'), Transform()),
+            lane_invasion=(blueprint_library.find('sensor.other.lane_invasion'), Transform())
+        )
 
         self._distance_for_success = distance_for_success
 
@@ -135,7 +148,14 @@ class CarlaAVEnv(gym.Env):
                                                   self._target)
                 self.last_direction = directions
 
-                obs = self._obs_converter.convert(snapshot, sensor_data, directions, self._target, self.id)
+                obs = self._obs_converter.convert(
+                    snapshot.find(self._ego_vehicle.id),
+                    self.vehicle_sensors_snapshot,
+                    self.env_sensors_snapshot,
+                    directions,
+                    self._target,
+                    self.id
+                )
 
                 if self.video_writer is not None and self.steps % 2 == 0:
                     self._raster_frame(sensor_data, snapshot, directions, obs)
@@ -388,17 +408,17 @@ class CarlaAVEnv(gym.Env):
             positions[start_index]
         )
 
-        # attach collision sensor
-        self._env_sensors['collision'] = self._world.spawn_actor(
-            blueprint_library.find("sensor.other.collision"),
-            Transform(),
-            attach_to=self._ego_vehicle
-        )
+        # TODO: attach all of those sensors in batch via commands?
+        self._env_sensors = {}
+        for sensor_id, (blueprint, transform) in self._env_sensor_definitions.items():
+            self._env_sensors[sensor_id] = self._world.spawn_actor(
+                blueprint, transform, attach_to=self._ego_vehicle)
 
-        # attach other sensors, as defined in experiment
+        # attach vehicle sensors, as defined in experiment
         self._vehicle_sensors = {}
-        for (blueprint, transform, id) in self._sensor_definitions:
-            self._vehicle_sensors[id] = self._world.spawn_actor(blueprint, transform, attach_to=self._ego_vehicle)
+        for sensor_id, (blueprint, transform) in self._vehicle_sensor_definitions.items():
+            self._vehicle_sensors[sensor_id] = self._world.spawn_actor(
+                blueprint, transform, attach_to=self._ego_vehicle)
 
         # add other vehicles according to experiment settings
         self._other_vehicles = self._spawn_other_vehicles(
@@ -608,3 +628,13 @@ class CarlaAVEnv(gym.Env):
                 self.logger.debug('Got RuntimeError... sleeping for 1')
                 self.logger.error(error)
                 time.sleep(1)
+
+    @property
+    def vehicle_sensors_snapshot(self):
+        return {
+
+        }
+
+    @property
+    def env_sensors_snapshot(self):
+        return {}
