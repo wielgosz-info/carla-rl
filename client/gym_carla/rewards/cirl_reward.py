@@ -1,13 +1,11 @@
+from gym_carla.rewards.reward import Reward
 import numpy as np
-from observation_utils import CarlaObservationConverter
 
-class CIRLReward():
+
+class CIRLReward(Reward):
     '''
         Reward function from https://arxiv.org/abs/1807.03776. 
     '''
-
-    def __init__(self):
-        self.converter = CarlaObservationConverter()
 
     def _r_s(self, control, direction):
         if direction == 'TURN_RIGHT' and control.steer < 0:
@@ -51,7 +49,6 @@ class CIRLReward():
         if measurements.player_measurements.collision_other:
             reward += -50
 
-
         # Intersection with sidewalk (r_r)
         s = measurements.player_measurements.intersection_offroad
         if s > 1e-6:
@@ -63,7 +60,3 @@ class CIRLReward():
             reward += -100
 
         return reward
-
-
-    def reset_reward(self):
-        return

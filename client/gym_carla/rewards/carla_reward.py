@@ -1,6 +1,8 @@
+from gym_carla.rewards.reward import Reward
 import numpy as np
 
-class CarlaReward():
+
+class CarlaReward(Reward):
     '''
         Reward used for training in the original CARLA paper (http://proceedings.mlr.press/v78/dosovitskiy17a/dosovitskiy17a.pdf)
 
@@ -11,11 +13,11 @@ class CarlaReward():
 
     '''
 
-    def __init__(self):
+    def __init__(self, converter):
+        super().__init__(converter)
         # Reward is calculated based on differences between timesteps, so need to
         # save the current state for the next reward.
         self.state = None
-
 
     def get_reward(self, measurements, target, direction, action, env_state):
 
@@ -59,7 +61,6 @@ class CarlaReward():
         self.state = new_state
 
         return r
-
 
     def reset_reward(self):
 

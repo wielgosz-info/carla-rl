@@ -5,7 +5,8 @@ import numpy as np
 import cv2
 import gym
 
-from carla import ActorSnapshot, RoadOption, Transform
+from carla import ActorSnapshot, Transform
+from agents.navigation.local_planner import RoadOption
 
 
 class ObservationsConverter(object):

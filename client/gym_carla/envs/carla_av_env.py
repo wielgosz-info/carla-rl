@@ -17,7 +17,7 @@ from agents.tools.misc import compute_distance
 from carla import (Client, LaneChange, LaneMarkingType, Transform, VehicleControl,
                    WorldSettings, WorldSnapshot, command)
 
-import rewards
+from gym_carla import rewards
 from carla_logger import get_carla_logger
 
 import gym_carla.example_suites as experiment_suites
@@ -73,7 +73,7 @@ class CarlaAVEnv(gym.Env):
         else:
             self._experiment_suite = getattr(experiment_suites, exp_suite_name)(self._city_name, subset)
 
-        self._reward = getattr(rewards, reward_class_name)()
+        self._reward = getattr(rewards, reward_class_name)(self._obs_converter)
         self._experiments = self._experiment_suite.get_experiments()
 
         self._client = None
