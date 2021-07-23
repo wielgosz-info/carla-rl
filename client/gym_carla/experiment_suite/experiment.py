@@ -4,7 +4,7 @@
 
 
 from typing import List
-from carla import WorldSettings, WeatherParameters
+from carla import WeatherParameters
 
 
 class Experiment(object):
@@ -34,9 +34,9 @@ class Experiment(object):
 
     def set(self, **kwargs):
         for key, value in kwargs.items():
-            if not hasattr(self, key):
+            if not hasattr(self, '_' + key):
                 raise ValueError('Experiment: no key named %r' % key)
-            setattr(self, key, value)
+            setattr(self, '_' + key, value)
 
     @property
     def task(self):

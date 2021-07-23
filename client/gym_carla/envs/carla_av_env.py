@@ -287,6 +287,7 @@ class CarlaAVEnv(gym.Env):
                     self._new_episode()
 
                 # Hack: Try sleeping so that the server is ready. Reduces the number of TCPErrors
+                # TODO: Possibly not needed now?
                 time.sleep(4)
 
                 # Move the simulation forward & get the observations
@@ -344,12 +345,17 @@ class CarlaAVEnv(gym.Env):
                 sensor.stop()
                 sensor.destroy()
 
-            self._client.apply_batch([command.DestroyActor(x) for x in [self._ego_vehicle] + self._other_vehicles])
+            vehicles = self._other_vehicles
+            if self._ego_vehicle is not None:
+                vehicles.append(self._ego_vehicle)
+            if len(vehicles):
+                self._client.apply_batch([command.DestroyActor(x) for x in vehicles])
 
-            for i in range(0, len(self._pedestrians, 2)):
+            for i in range(0, len(self._pedestrians), 2):
                 self._pedestrians[i].stop()
-            self._client.apply_batch([command.DestroyActor(x['id']) for x in self._pedestrians] +
-                                     [command.DestroyActor(x['con']) for x in self._pedestrians])
+            if len(self._pedestrians):
+                self._client.apply_batch([command.DestroyActor(x['id']) for x in self._pedestrians] +
+                                         [command.DestroyActor(x['con']) for x in self._pedestrians])
         except RuntimeError as e:
             self.logger.debug('Error when destroying actors')
             self.logger.error(e)
@@ -447,11 +453,11 @@ class CarlaAVEnv(gym.Env):
             time.sleep(1)
             self._world = self._client.get_world()
 
-        self._world.load_settings(self._world_settings)
+        self._world.apply_settings(self._world_settings)
         self._world.set_weather(experiment.weather)
 
         self._dao = GlobalRoutePlannerDAO(
-            self._world,
+            self._world.get_map(),
             0.2  # in meters
         )
         self._planner = GlobalRoutePlanner(self._dao)
@@ -494,7 +500,7 @@ class CarlaAVEnv(gym.Env):
                 blueprint, transform, attach_to=self._ego_vehicle)
 
         # reset sensor buffers
-        self._prepare_sensors_buffer()
+        self._sensors_buffer = self._prepare_sensors_buffer()
 
         # add other vehicles according to experiment settings
         self._other_vehicles = self._spawn_other_vehicles(
@@ -513,8 +519,7 @@ class CarlaAVEnv(gym.Env):
         self._time_out = self._experiment_suite.calculate_time_out(
             self._get_shortest_path(positions[start_index], positions[end_index]))
         self._target = positions[end_index]
-        self._episode_name = str(experiment.Conditions.WeatherId) + '_' \
-            + str(experiment.task) + '_' + str(start_index) \
+        self._episode_name = str(experiment.task) + '_' + str(start_index) \
             + '_' + str(end_index)
 
         if ((self.num_episodes % self.video_every) == 0) and (self.id == 0):

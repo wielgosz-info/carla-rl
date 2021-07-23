@@ -29,7 +29,7 @@ class EgoVehicleObservations(Observations):
         :return: forward speed in m/s
         :rtype: float
         """
-        yaw_global = np.radians(vehicle_transform.rotation)
+        yaw_global = np.radians(vehicle_transform.rotation.yaw)
 
         rotation_global = np.array([
             [np.sin(yaw_global),  np.cos(yaw_global)],
@@ -38,7 +38,8 @@ class EgoVehicleObservations(Observations):
 
         vehicle_velocity = np.array([vehicle_velocity.y, vehicle_velocity.x])
         velocity_local = rotation_global.T @ vehicle_velocity
-        return velocity_local.item()
+        # TODO: which one? :D
+        return velocity_local[0]
 
     def extract_observations(self,
                              player_snapshot: ActorSnapshot,

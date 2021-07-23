@@ -137,7 +137,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
             self.stacked_obs[k] = torch.zeros((venv.num_envs,) + low.shape).to(device)
 
             new_observation_spaces[k] = gym.spaces.Box(
-                low=low, high=high, dtype=venv.observation_space.dtype)
+                low=low, high=high, dtype=low.dtype)
 
         if set(new_observation_spaces.keys()) == {None}:
             VecEnvWrapper.__init__(self, venv, observation_space=new_observation_spaces[None])

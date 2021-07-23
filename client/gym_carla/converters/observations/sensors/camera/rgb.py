@@ -34,9 +34,13 @@ class RGBCameraSensorObservations(Observations):
                              directions: RoadOption,
                              target: Transform,
                              env_id) -> np.ndarray:
-        try:
-            img = cv2.resize(vehicle_sensors[self.__sensor_id].raw_data, (self.__h, self.__w)) / 255.0
-        except:
-            raise RGBCameraSensorException(env_id)
-        img = np.transpose(img, (2, 0, 1))
-        return img
+        if vehicle_sensors[self.__sensor_id] is not None:
+            try:
+                img = cv2.resize(vehicle_sensors[self.__sensor_id].raw_data / 255.0, (self.__h, self.__w))
+            except:
+                raise RGBCameraSensorException(env_id)
+            img = np.transpose(img, (2, 0, 1))
+            return img
+        else:
+            # TODO: get it done correctly
+            return cv2.resize(np.zeros((self.__h, self.__w, self.__c), dtype=np.float32), (self.__h, self.__w))
