@@ -6,7 +6,7 @@ class Reward(object):
         super().__init__()
         self.converter = converter
 
-    def get_reward(self, measurements, target, directions, action, env_state):
+    def get_reward(self, world_snapshot, target, directions, action, env_state):
         raise NotImplementedError()
 
     def reset_reward(self):

@@ -130,7 +130,6 @@ def main():
         obs_converter_items['v'] = [
             EgoVehicleObservations(),
             DirectionsObservations(),
-            # TODO: verify neither CollisionSensorObservations nor LaneInvasionSensorObservations here?,
             TargetObservations(rel_coord_system=True)
         ]
         obs_converter_items['world_pos'] = WorldPositionObservations()
@@ -152,9 +151,8 @@ def main():
         action_converter = ContinuousTBSActionsConverter()
 
     envs = make_vec_envs(obs_converter, action_converter, args.starting_port, config.seed, config.num_processes,
-                         config.gamma, device, config.reward_class, num_frame_stack=1, subset=config.experiments_subset,
-                         norm_reward=norm_reward, norm_obs=norm_obs, apply_her=config.num_virtual_goals > 0,
-                         video_every=args.video_interval, video_dir=os.path.join(args.save_dir, 'video', experiment_name))
+                         config.gamma, device, reward_class_name='SparseReward', num_frame_stack=1, subset=config.experiments_subset,
+                         norm_reward=norm_reward, norm_obs=norm_obs, apply_her=config.num_virtual_goals > 0)
 
     if config.agent == 'forward':
         agent = rl_agents.ForwardCarla()

@@ -11,21 +11,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg-turbo8-dev \
     libpng-dev \
     python3-pip \
-    \
-    build-essential \
-    cmake \
-    gcc \
-    git \
-    g++ \
-    python3-dev \
-    libavcodec-dev \
-    libavformat-dev \
-    libswscale-dev \
-    libavresample-dev \
-    libopenjp2-7-dev \
-    libgstreamer-plugins-base1.0-dev \
-    libgstreamer1.0-dev \
-    \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir -f https://download.pytorch.org/whl/torch_stable.html \
@@ -35,18 +20,6 @@ RUN pip install --no-cache-dir -f https://download.pytorch.org/whl/torch_stable.
     && pip install --no-cache-dir \
     autopep8 \
     pylint
-
-# Compile OpenCV
-# TODO: Maybe pip install opencv-python-headless (or opencv-contrib-python-headless) would be enough? check someday
-RUN cd /tmp \
-    && git clone https://github.com/opencv/opencv.git \
-    && cd opencv \
-    && git checkout 4.5.3 \
-    && mkdir build \
-    && cd build \
-    && cmake ../ \
-    && make -j32 \
-    && make install
 
 # Let's pretend we've installed CARLA via easy_install
 # It's client for Python 3.7 and in Ubuntu 20.04 there's Python 3.8 but hopefully this will work

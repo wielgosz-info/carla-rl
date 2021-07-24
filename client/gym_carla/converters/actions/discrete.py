@@ -33,11 +33,12 @@ class DiscreteActionsConverter(ActionsConverter):
 
         if isinstance(action, np.ndarray):
             action = action.item()
-        if isinstance(action, int):
+        if not isinstance(action, int):
             print('Unexpected action got {}'.format(type(action)))
 
         action = self.__discrete_actions[action]
-        if ego_vehicle_snapshot is not None and ego_vehicle_snapshot.get_velocity() * 3.6 < 30:
+        # TODO: it should be forward speed here again
+        if ego_vehicle_snapshot is not None and ego_vehicle_snapshot.get_velocity().x * 3.6 < 30:
             control.throttle = action[0]
         elif action[0] > 0.:
             control.throttle = 0.

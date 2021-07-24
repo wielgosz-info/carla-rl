@@ -14,21 +14,20 @@ from vec_env.util import dict_to_obs, obs_to_dict
 from gym_carla.envs.carla_av_env import CarlaAVEnv
 
 
-def make_env(obs_converter, action_converter, port, id, seed, subset,
-             video_every, video_dir, reward_class_name, experiment_suite, benchmark, city_name):
-    return lambda: CarlaAVEnv(obs_converter, action_converter, id, seed, reward_class_name=reward_class_name, port=port,
-                              subset=subset, video_every=video_every, video_dir=video_dir,
+def make_env(obs_converter, action_converter, port, env_id, seed, subset, reward_class_name, experiment_suite, benchmark, city_name):
+    return lambda: CarlaAVEnv(obs_converter, action_converter, env_id, seed, reward_class_name=reward_class_name, port=port,
+                              subset=subset,
                               exp_suite_name=experiment_suite,
                               benchmark=benchmark, city_name=city_name)
 
 
 def make_vec_envs(obs_converter, action_converter, starting_port, seed, num_processes, gamma,
-                  device, reward_class_name, num_frame_stack=1, subset=None, norm_reward=True, norm_obs=True, video_every=100, video_dir='./video', apply_her=False,
+                  device, reward_class_name, num_frame_stack=1, subset=None, norm_reward=True, norm_obs=True, apply_her=False,
                   experiment_suite='TrainingSuite', benchmark=False, city_name='Town01'):
 
     ports = range(starting_port, starting_port + 3*num_processes, 3)
     envs = [make_env(obs_converter, action_converter, ports[i], i, seed + i,
-                     subset, video_every, video_dir, reward_class_name,
+                     subset, reward_class_name,
                      experiment_suite,
                      benchmark, city_name) for i in range(num_processes)]
 

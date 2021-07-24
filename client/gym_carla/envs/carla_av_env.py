@@ -1,14 +1,10 @@
-from agents.navigation.local_planner import RoadOption
 from gym_carla.converters.observations.sensors.camera.rgb import RGBCameraSensorException
-import os
 import random
 import time
 from typing import OrderedDict
 
-import cv2
 import gym
 import numpy as np
-import skvideo.io
 import queue
 
 from agents.navigation.global_route_planner import GlobalRoutePlanner
@@ -39,13 +35,11 @@ class CarlaAVEnv(gym.Env):
                  env_id,
                  random_seed=0,
                  exp_suite_name='TrainingSuite',
-                 reward_class_name='RewardCarla',
+                 reward_class_name='SparseReward',
                  host='server',
                  port=2000,
                  city_name='Town01',
                  subset=None,
-                 video_every=100,
-                 video_dir='./video/',
                  distance_for_success=2.0,
                  benchmark=False,
                  wait_for_data_timeout=1.0
@@ -117,9 +111,6 @@ class CarlaAVEnv(gym.Env):
         self.last_distance_to_goal = None
         self.last_direction = None
         self.last_snapshot = None
-        self.video_every = video_every
-        self.video_dir = video_dir
-        self.video_writer = None
         self._success = False
         self._failure_timeout = False
         self._failure_collision = False
@@ -129,12 +120,6 @@ class CarlaAVEnv(gym.Env):
         # TODO: should this be here?
         np.random.seed(random_seed)
         random.seed(random_seed)
-
-        try:
-            if not os.path.isdir(self.video_dir):
-                os.makedirs(self.video_dir)
-        except OSError:
-            pass
 
         self.steps = 0
         self.num_episodes = 0
@@ -201,7 +186,8 @@ class CarlaAVEnv(gym.Env):
 
             try:
                 # Send control
-                control = self._action_converter.action_to_control(action, self.last_snapshot)
+                control = self._action_converter.action_to_control(
+                    action, self.last_snapshot.find(self._ego_vehicle.id))
                 self._ego_vehicle.apply_control(control)
 
                 # Move the simulation forward & get the observations
@@ -225,9 +211,6 @@ class CarlaAVEnv(gym.Env):
                     self._target,
                     self.id
                 )
-
-                if self.video_writer is not None and self.steps % 2 == 0:
-                    self._raster_frame(vehicle_sensors_snapshot, world_snapshot, directions, obs)
 
                 self.last_obs = obs
 
@@ -260,7 +243,7 @@ class CarlaAVEnv(gym.Env):
 
         # Get the reward
         env_state = {'timeout': timeout, 'collision': collision, 'success': success}
-        reward = self._reward.get_reward(world_snapshot, self._target, self.last_direction, control, env_state)
+        reward = self._reward.get_reward(self.last_snapshot, self._target, self.last_direction, control, env_state)
 
         # Additional information
         info = {'carla-reward': reward}
@@ -328,28 +311,20 @@ class CarlaAVEnv(gym.Env):
                 self._make_carla_client(self.host, self.port)
 
     def close(self):
-        if self.video_writer is not None:
-            try:
-                self.video_writer.close()
-            except Exception as e:
-                self.logger.debug('Error when closing video writer')
-                self.logger.error(e)
-            self.video_writer = None
-
         try:
             for sensor in self._env_sensors.values():
                 sensor.stop()
-                sensor.destroy()
+            self._client.apply_batch([command.DestroyActor(x.id) for x in self._env_sensors.values()])
 
             for sensor in self._vehicle_sensors.values():
                 sensor.stop()
-                sensor.destroy()
+            self._client.apply_batch([command.DestroyActor(x.id) for x in self._vehicle_sensors.values()])
 
-            vehicles = self._other_vehicles
+            vehicles_ids = self._other_vehicles
             if self._ego_vehicle is not None:
-                vehicles.append(self._ego_vehicle)
-            if len(vehicles):
-                self._client.apply_batch([command.DestroyActor(x) for x in vehicles])
+                vehicles_ids.append(self._ego_vehicle)
+            if len(vehicles_ids):
+                self._client.apply_batch([command.DestroyActor(x) for x in vehicles_ids])
 
             for i in range(0, len(self._pedestrians), 2):
                 self._pedestrians[i].stop()
@@ -365,40 +340,6 @@ class CarlaAVEnv(gym.Env):
         self._ego_vehicle = None
         self._other_vehicles = []
         self._pedestrians = []
-
-    def _raster_frame(self, vehicle_sensors_snapshot, world_snapshot, directions, obs):
-        frame = obs['img'].copy()
-
-        cv2.putText(frame, text='Episode number: {:,}'.format(self.num_episodes-1),
-                    org=(50, 50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.0,
-                    color=[0, 0, 0], thickness=2)
-        cv2.putText(frame, text='Environment steps: {:,}'.format(self.steps),
-                    org=(50, 80), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.0,
-                    color=[0, 0, 0], thickness=2)
-
-        # if np.isclose(directions, REACH_GOAL):
-        #     dir_str = 'REACH GOAL'
-        # el
-        dir_str = 'Unknown'
-        if directions == RoadOption.STRAIGHT:
-            dir_str = 'GO STRAIGHT'
-        elif directions == RoadOption.RIGHT:
-            dir_str = 'TURN RIGHT'
-        elif directions == RoadOption.LEFT:
-            dir_str = 'TURN LEFT'
-        elif directions == RoadOption.LANEFOLLOW:
-            dir_str = 'LANE FOLLOW'
-
-        cv2.putText(frame, text='Direction: {}'.format(dir_str),
-                    org=(50, 110), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.0,
-                    color=[0, 0, 0], thickness=2)
-        cv2.putText(frame, text='Speed: {:.02f}'.format(world_snapshot.player_snapshot.forward_speed * 3.6),
-                    org=(50, 140), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.0,
-                    color=[0, 0, 0], thickness=2)
-        cv2.putText(frame, text='rel_x: {:.02f}, rel_y: {:.02f}'.format(obs['v'][-2].item(), obs['v'][-1].item()),
-                    org=(50, 170), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.0,
-                    color=[0, 0, 0], thickness=2)
-        self.video_writer.writeFrame(frame)
 
     def _get_distance_to_goal(self, world_snapshot: WorldSnapshot, target: Transform):
         distance_to_goal = compute_distance(
@@ -521,13 +462,6 @@ class CarlaAVEnv(gym.Env):
         self._target = positions[end_index]
         self._episode_name = str(experiment.task) + '_' + str(start_index) \
             + '_' + str(end_index)
-
-        if ((self.num_episodes % self.video_every) == 0) and (self.id == 0):
-            video_path = os.path.join(self.video_dir, '{:08d}_'.format(self.num_episodes) + self._episode_name + '.mp4')
-            self.logger.info('Writing video at {}'.format(video_path))
-            self.video_writer = skvideo.io.FFmpegWriter(video_path, inputdict={'-r': '30'}, outputdict={'-r': '30'})
-        else:
-            self.video_writer = None
 
         self.num_episodes += 1
 

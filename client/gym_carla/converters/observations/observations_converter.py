@@ -2,7 +2,6 @@ from gym_carla.converters.observations.observations import Observations
 from typing import Dict, Union, List
 from gym import spaces
 import numpy as np
-import cv2
 import gym
 
 from carla import ActorSnapshot, Transform

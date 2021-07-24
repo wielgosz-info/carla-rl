@@ -8,8 +8,8 @@ class HERReward(Reward):
         and otherwise the velocity of the vehicle.
     '''
 
-    def get_reward(self, measurements, target, directions, action, env_state):
-        v = min(25, measurements.player_measurements.forward_speed * 3.6) / 25
+    def get_reward(self, world_snapshot, target, directions, action, env_state):
+        v = min(25, world_snapshot.player_measurements.forward_speed * 3.6) / 25
         if env_state['success']:
             return 500.0
         return v

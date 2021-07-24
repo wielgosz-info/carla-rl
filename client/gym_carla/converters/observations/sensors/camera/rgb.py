@@ -1,9 +1,9 @@
 import gym
 import numpy as np
-import cv2
+from PIL import Image as PILImage
 from gym_carla.converters.observations.observations import Observations
 from typing import Dict
-from carla import ActorSnapshot, Transform
+from carla import ActorSnapshot, ColorConverter, Transform, Image
 from agents.navigation.local_planner import RoadOption
 
 
@@ -23,7 +23,7 @@ class RGBCameraSensorObservations(Observations):
         self.__sensor_id = sensor_id
 
     def get_observation_space(self) -> gym.spaces.Space:
-        img_shape = (self.__c, self.__h, self.__w)
+        img_shape = (self.__c, self.__w, self.__h)
         img_box = gym.spaces.Box(low=0, high=1, shape=img_shape, dtype=np.float32)
         return img_box
 
@@ -34,13 +34,19 @@ class RGBCameraSensorObservations(Observations):
                              directions: RoadOption,
                              target: Transform,
                              env_id) -> np.ndarray:
-        if vehicle_sensors[self.__sensor_id] is not None:
+        data: Image = vehicle_sensors[self.__sensor_id]
+        if data is not None:
             try:
-                img = cv2.resize(vehicle_sensors[self.__sensor_id].raw_data / 255.0, (self.__h, self.__w))
-            except:
-                raise RGBCameraSensorException(env_id)
-            img = np.transpose(img, (2, 0, 1))
-            return img
+                # convert image in-place
+                data.convert(ColorConverter.Raw)
+
+                img = PILImage.frombuffer('RGBA', (data.width, data.height), data.raw_data, "raw", 'RGBA', 0, 1)  # load
+                img = img.resize((self.__w, self.__h), resample=PILImage.BICUBIC)             # resize
+                img = img.convert('RGB')                                                      # drop alpha
+                img = np.array(img)                                                           # convert to numpy array
+                img = np.transpose(img, (2, 0, 1))                                            # [W,H,C] -> [C,W,H]
+                return img
+            except Exception as exc:
+                raise RGBCameraSensorException(env_id) from exc
         else:
-            # TODO: get it done correctly
-            return cv2.resize(np.zeros((self.__h, self.__w, self.__c), dtype=np.float32), (self.__h, self.__w))
+            return np.zeros((self.__c, self.__w, self.__h), dtype=np.float32)

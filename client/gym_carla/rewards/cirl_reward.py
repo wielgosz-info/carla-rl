@@ -28,7 +28,7 @@ class CIRLReward(Reward):
 
         assert False
 
-    def get_reward(self, measurements, target, direction, control, env_state):
+    def get_reward(self, world_snapshot, target, direction, control, env_state):
 
         reward = 0
         direction = self.converter.direction_to_string(direction)
@@ -38,24 +38,24 @@ class CIRLReward(Reward):
             return 0
 
         # Speed (km/h)
-        v = measurements.player_measurements.forward_speed * 3.6
+        v = world_snapshot.player_measurements.forward_speed * 3.6
         reward += self._r_v(v, direction)
 
         reward += self._r_s(control, direction)
 
         # Collisions (r_d in the paper)
-        if measurements.player_measurements.collision_vehicles > 1e-6 or measurements.player_measurements.collision_pedestrians > 1e-6:
+        if world_snapshot.player_measurements.collision_vehicles > 1e-6 or world_snapshot.player_measurements.collision_pedestrians > 1e-6:
             reward += -100
-        if measurements.player_measurements.collision_other:
+        if world_snapshot.player_measurements.collision_other:
             reward += -50
 
         # Intersection with sidewalk (r_r)
-        s = measurements.player_measurements.intersection_offroad
+        s = world_snapshot.player_measurements.intersection_offroad
         if s > 1e-6:
             reward += -100
 
         # Intersection with opposite lane (r_o)
-        o = measurements.player_measurements.intersection_otherlane
+        o = world_snapshot.player_measurements.intersection_otherlane
         if o > 1e-6:
             reward += -100
 

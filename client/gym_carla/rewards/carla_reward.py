@@ -19,12 +19,12 @@ class CarlaReward(Reward):
         # save the current state for the next reward.
         self.state = None
 
-    def get_reward(self, measurements, target, direction, action, env_state):
+    def get_reward(self, world_snapshot, target, direction, action, env_state):
 
         # Distance towards goal (in km)
-        d_x = measurements.player_measurements.transform.location.x
-        d_y = measurements.player_measurements.transform.location.y
-        d_z = measurements.player_measurements.transform.location.z
+        d_x = world_snapshot.player_measurements.transform.location.x
+        d_y = world_snapshot.player_measurements.transform.location.y
+        d_z = world_snapshot.player_measurements.transform.location.z
         player_location = np.array([d_x, d_y, d_z])
         goal_location = np.array([target.location.x,
                                   target.location.y,
@@ -32,18 +32,18 @@ class CarlaReward(Reward):
         d = np.linalg.norm(player_location - goal_location) / 1000
 
         # Speed
-        v = measurements.player_measurements.forward_speed * 3.6
+        v = world_snapshot.player_measurements.forward_speed * 3.6
         # Collision damage
-        c_v = measurements.player_measurements.collision_vehicles
-        c_p = measurements.player_measurements.collision_pedestrians
-        c_o = measurements.player_measurements.collision_other
+        c_v = world_snapshot.player_measurements.collision_vehicles
+        c_p = world_snapshot.player_measurements.collision_pedestrians
+        c_o = world_snapshot.player_measurements.collision_other
         c = c_v + c_p + c_o
 
         # Intersection with sidewalk
-        s = measurements.player_measurements.intersection_offroad
+        s = world_snapshot.player_measurements.intersection_offroad
 
         # Intersection with opposite lane
-        o = measurements.player_measurements.intersection_otherlane
+        o = world_snapshot.player_measurements.intersection_otherlane
 
         # Compute reward
         r = 0
