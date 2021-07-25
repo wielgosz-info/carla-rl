@@ -24,7 +24,7 @@ Docker compose file has been prepared for the ease of running the whole setup. I
 To get everything up and running (assuming you have [Docker](https://docs.docker.com/get-started/overview/), [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/overview.html), and [NVIDIA drivers that support CUDA 11.1](https://docs.nvidia.com/deploy/cuda-compatibility/index.html) installed) the following command should be enough:
 
 ```sh
-docker-compose up
+docker-compose -f "docker-compose.yml" up -d --build
 ```
 
 ### Arguments and Config Files
@@ -78,3 +78,5 @@ ssh -N forward_carlaviz_backend
 ```
 
 We could handle the `carlaviz:8080` port forwarding similarly, but VS Code can do it for us with a click of a button, so there's no need.
+
+**Important note: if you need to restart the carlaviz container, kill the forwarding first, then restart carlaviz and wait for it to be running, and only then start forwarding again. Otherwise you will get stuck with "Launch the backend and refresh" message in the browser.**

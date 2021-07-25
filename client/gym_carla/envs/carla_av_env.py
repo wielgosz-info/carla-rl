@@ -317,8 +317,8 @@ class CarlaAVEnv(gym.Env):
             if len(vehicles_ids):
                 self._client.apply_batch([command.DestroyActor(x) for x in vehicles_ids])
 
-            for i in range(0, len(self._pedestrians), 2):
-                self._pedestrians[i].stop()
+            for pedestrian in self._pedestrians:
+                self._world.find(pedestrian['con']).stop()
             if len(self._pedestrians):
                 self._client.apply_batch([command.DestroyActor(x['id']) for x in self._pedestrians] +
                                          [command.DestroyActor(x['con']) for x in self._pedestrians])
@@ -331,6 +331,12 @@ class CarlaAVEnv(gym.Env):
         self._ego_vehicle = None
         self._other_vehicles = []
         self._pedestrians = []
+
+    def render(self, mode, **kwargs):
+        '''
+        By default render nothing, all render modes should be handled by wrappers.
+        '''
+        pass
 
     def _get_distance_to_goal(self, world_snapshot: WorldSnapshot, target: Transform):
         distance_to_goal = compute_distance(

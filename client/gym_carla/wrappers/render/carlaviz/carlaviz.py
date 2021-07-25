@@ -15,7 +15,9 @@ class CarlaVizRenderWrapper(gym.Wrapper):
 
     def __init__(self, env, *args, **kwargs):
         super().__init__(env, *args, **kwargs)
-        self.metadata['render.modes'] = list(set(self.metadata['render.modes'].append('human')))
+
+        self.metadata['render.modes'].append('human')
+        self.metadata['render.modes'] = list(set(self.metadata['render.modes']))
 
         self.__painter = CarlaPainter('viz', 8089)
         self.__trajectories = [[]]
@@ -47,3 +49,7 @@ class CarlaVizRenderWrapper(gym.Wrapper):
                                       [[ego_location.x, ego_location.y, ego_location.z + 10.0]], size=20)
 
         return self.env.render(mode, **kwargs)
+
+    def close(self):
+        super().close()
+        self.__painter.close()

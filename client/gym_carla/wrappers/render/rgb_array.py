@@ -1,5 +1,3 @@
-import copy
-
 import gym
 import numpy as np
 from carla import ColorConverter, Image
@@ -13,7 +11,9 @@ class RGBArrayRenderWrapper(gym.Wrapper):
 
     def __init__(self, env, *args, **kwargs):
         super().__init__(env, *args, **kwargs)
-        self.metadata['render.modes'] = list(set(self.metadata['render.modes'].append('rgb_array')))
+
+        self.metadata['render.modes'].append('rgb_array')
+        self.metadata['render.modes'] = list(set(self.metadata['render.modes']))
 
     def render(self, mode='human', **kwargs):
         if mode == 'rgb_array':
@@ -27,7 +27,7 @@ class RGBArrayRenderWrapper(gym.Wrapper):
                         'sensor.camera.depth': ColorConverter.Depth,  # or ColorConverter.LogarithmicDepth
                         'sensor.camera.semantic_segmentation': ColorConverter.CityScapesPalette
                     }[t]
-                    data: Image = copy.deepcopy(self.env.vehicle_sensors_snapshot[k])
+                    data: Image = self.env.vehicle_sensors_snapshot[k]
                     data.convert(converter)
 
                     img = PILImage.frombuffer('RGBA', (data.width, data.height),

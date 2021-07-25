@@ -1,5 +1,4 @@
 import gym
-import copy
 import numpy as np
 from PIL import Image as PILImage
 from gym_carla.converters.observations.observations import Observations
@@ -35,7 +34,7 @@ class RGBCameraSensorObservations(Observations):
                              directions: RoadOption,
                              target: Transform,
                              env_id) -> np.ndarray:
-        data: Image = copy.deepcopy(vehicle_sensors[self.__sensor_id])
+        data: Image = vehicle_sensors[self.__sensor_id]
         if data is not None:
             try:
                 # convert image in-place

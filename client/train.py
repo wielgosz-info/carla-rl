@@ -225,6 +225,9 @@ def main():
             # Observe reward and next obs
             obs, reward, done, info = envs.step(action)
 
+            # Visualize
+            envs.render(mode='human')
+
             # For logging purposes
             carla_rewards = torch.tensor([i['carla-reward'] for i in info], dtype=torch.float)
             episode_reward += carla_rewards

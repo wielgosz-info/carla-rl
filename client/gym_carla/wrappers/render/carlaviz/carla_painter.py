@@ -8,6 +8,7 @@ from websocket import create_connection
 import logging
 import json
 
+
 class CarlaPainter(object):
     def __init__(self, host, port):
         self._set_up_logger()
@@ -108,7 +109,6 @@ class CarlaPainter(object):
         except Exception as e:
             self._logger.error(e)
 
-
     def _draw_points(self, points):
         data_dict = {}
         data_dict['type'] = 'point'
@@ -117,7 +117,6 @@ class CarlaPainter(object):
             self._ws.send(json.dumps(data_dict))
         except Exception as e:
             self._logger.error(e)
-
 
     def _draw_polylines(self, vertices, color='#00FF00', width=2.5):
         data_dict = {}
@@ -130,7 +129,6 @@ class CarlaPainter(object):
         except Exception as e:
             self._logger.error(e)
 
-
     def _set_up_logger(self, log_level=logging.INFO):
         stream_handler = logging.StreamHandler()
         log_formatter = logging.Formatter(
@@ -142,3 +140,8 @@ class CarlaPainter(object):
         self._logger.propagate = 0
         if not self._logger.handlers:
             self._logger.addHandler(stream_handler)
+
+    def close(self):
+        self._logger.info("Closing connection to drawing server")
+        self._ws.close()
+        self._logger.info("Closed connection to drawing server")

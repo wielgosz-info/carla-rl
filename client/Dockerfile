@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg-turbo8-dev \
     libpng-dev \
     python3-pip \
+    screen \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir -f https://download.pytorch.org/whl/torch_stable.html \
@@ -27,6 +28,7 @@ COPY --from=carlasim/carla:0.9.11 /home/carla/PythonAPI/carla/dist/carla-0.9.11-
 RUN echo "import sys; sys.__plen = len(sys.path)\n./carla-0.9.11-py3.7-linux-x86_64.egg\nimport sys; new=sys.path[sys.__plen:]; del sys.path[sys.__plen:]; p=getattr(sys,'__egginsert',0); sys.path[p:p]=new; sys.__egginsert = p+len(new)" > /usr/local/lib/python3.8/dist-packages/easy_install.pth
 
 # We're also going to pretend that agents are installable so we can easily import them later; unfortunatelly it needs to be called 'agents' due to internal structure
+# TODO: I think the official CARLA Scenario Runner package also have those...
 COPY --from=carlasim/carla:0.9.11 /home/carla/PythonAPI/carla/agents /usr/local/lib/python3.8/dist-packages/agents
 
 # Add requirements.txt first for caching purposes.
