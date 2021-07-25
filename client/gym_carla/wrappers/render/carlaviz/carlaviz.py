@@ -38,7 +38,8 @@ class CarlaVizRenderWrapper(gym.Wrapper):
     def render(self, mode='human', **kwargs):
         if mode == 'human':
             # draw trajectories
-            self.__painter.draw_polylines(self.__trajectories)
+            if len(self.__trajectories[0]):
+                self.__painter.draw_polylines(self.__trajectories)
 
             # draw ego vehicle's velocity & location just above the ego vehicle
             ego_velocity = self.env.ego_vehicle_snapshot.get_velocity()

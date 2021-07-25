@@ -14,13 +14,16 @@ class RGBCameraSensorException(Exception):
 
 
 class RGBCameraSensorObservations(Observations):
-    def __init__(self, h=84, w=84, sensor_id='rgb_camera') -> None:
+    def __init__(self, h=84, w=84, sensor_id='rgb_camera', cache=True) -> None:
         super().__init__()
 
         self.__h = h
         self.__w = w
         self.__c = 3
         self.__sensor_id = sensor_id
+
+        self.__cache = cache
+        self.__last_img = np.zeros((self.__c, self.__w, self.__h), dtype=np.float32)
 
     def get_observation_space(self) -> gym.spaces.Space:
         img_shape = (self.__c, self.__w, self.__h)
@@ -45,8 +48,9 @@ class RGBCameraSensorObservations(Observations):
                 img = img.convert('RGB')                                                      # drop alpha
                 img = np.array(img)                                                           # convert to numpy array
                 img = np.transpose(img, (2, 0, 1))                                            # [W,H,C] -> [C,W,H]
+                if self.__cache:
+                    self.__last_img = img
                 return img
             except Exception as exc:
                 raise RGBCameraSensorException(env_id) from exc
-        else:
-            return np.zeros((self.__c, self.__w, self.__h), dtype=np.float32)
+        return self.__last_img
