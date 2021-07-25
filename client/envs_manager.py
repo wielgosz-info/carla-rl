@@ -12,13 +12,17 @@ from vec_env.vec_normalize import VecNormalize
 from vec_env.util import dict_to_obs, obs_to_dict
 
 from gym_carla.envs.carla_av_env import CarlaAVEnv
+from gym_carla.wrappers.render.carlaviz import CarlaVizRenderWrapper
 
 
 def make_env(obs_converter, action_converter, port, env_id, seed, subset, reward_class_name, experiment_suite, benchmark, city_name):
-    return lambda: CarlaAVEnv(obs_converter, action_converter, env_id, seed, reward_class_name=reward_class_name, port=port,
-                              subset=subset,
-                              exp_suite_name=experiment_suite,
-                              benchmark=benchmark, city_name=city_name)
+    return lambda: CarlaVizRenderWrapper(CarlaAVEnv(obs_converter, action_converter, env_id, seed,
+                                                    reward_class_name=reward_class_name,
+                                                    port=port,
+                                                    subset=subset,
+                                                    exp_suite_name=experiment_suite,
+                                                    benchmark=benchmark,
+                                                    city_name=city_name))
 
 
 def make_vec_envs(obs_converter, action_converter, starting_port, seed, num_processes, gamma,

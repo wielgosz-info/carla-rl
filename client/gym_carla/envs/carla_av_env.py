@@ -1,7 +1,7 @@
 from gym_carla.converters.observations.sensors.camera.rgb import RGBCameraSensorException
 import random
 import time
-from typing import OrderedDict
+from typing import Any, Dict, List, OrderedDict, Tuple, Union
 
 import gym
 import numpy as np
@@ -11,7 +11,7 @@ from agents.navigation.global_route_planner import GlobalRoutePlanner
 from agents.navigation.global_route_planner_dao import GlobalRoutePlannerDAO
 from agents.tools.misc import compute_distance
 from carla import (Client, LaneChange, LaneMarkingType, Transform, VehicleControl,
-                   WorldSettings, WorldSnapshot, command)
+                   WorldSettings, WorldSnapshot, ActorSnapshot, command)
 
 from gym_carla import rewards
 from carla_logger import get_carla_logger
@@ -45,33 +45,20 @@ class CarlaAVEnv(gym.Env):
                  wait_for_data_timeout=1.0
                  ):
 
-        self.logger = get_carla_logger()
-        self.logger.info('Environment {} running in port {}'.format(env_id, port))
+        self._logger = get_carla_logger()
+        self._logger.info('Environment {} running in port {}'.format(env_id, port))
 
-        self.host, self.port = host, port
-        self.id = env_id
+        self._env_id = env_id
 
         self._obs_converter = obs_converter
-        self.observation_space = self._obs_converter.get_observation_space()
         self._action_converter = action_converter
+
+        self.observation_space = self._obs_converter.get_observation_space()
         self.action_space = self._action_converter.get_action_space()
 
-        self._city_name = city_name
-
-        # TODO: experiment suite should be a param (or a separate env if there is a lot of logic involved),
-        # not this kind of weird switch...
-        # or rather - benchmarking a suite is a different thing than using a suite for training,
-        # but every suite can potentially be used in both settings
-        if benchmark:
-            self._experiment_suite = getattr(experiment_suites, exp_suite_name)(self._city_name)
-        else:
-            self._experiment_suite = getattr(experiment_suites, exp_suite_name)(self._city_name, subset)
-
         self._reward = getattr(rewards, reward_class_name)(self._obs_converter)
-        self._experiments = self._experiment_suite.get_experiments()
 
-        self._client = None
-        self._world = None
+        self._host, self._port = host, port
         self._world_settings = WorldSettings(
             synchronous_mode=True,
             fixed_delta_seconds=0.05,  # 20 FPS; fixed_delta_seconds <= max_substep_delta_time * max_substeps
@@ -79,50 +66,68 @@ class CarlaAVEnv(gym.Env):
             max_substep_delta_time=0.01,
             max_substeps=10
         )
-
+        self._client = None
+        self._world = None
         self._dao = None  # Needs to be reset after new world is loaded
         self._planner = None  # Needs DAO
         self._env_sensors = {}  # Sensors needed to manage env/generate observations
         self._vehicle_sensors = {}  # Sensors available to Vehicle
+
         self._sensors_buffer = {}
         self._wait_for_data_timeout = wait_for_data_timeout
+
+        # TODO: experiment suite should be a param (or a separate env if there is a lot of logic involved),
+        # not this kind of weird switch...
+        # or rather - benchmarking a suite is a different thing than using a suite for training,
+        # but every suite can potentially be used in both settings
+        self._city_name = city_name
+        self._episode_name = None
+        if benchmark:
+            self._experiment_suite = getattr(experiment_suites, exp_suite_name)(self._city_name)
+        else:
+            self._experiment_suite = getattr(experiment_suites, exp_suite_name)(self._city_name, subset)
+        self._experiments = self._experiment_suite.get_experiments()
 
         self._other_vehicles = []
         self._pedestrians = []
         self._ego_vehicle = None
+
         self._time_out = None
-        self._episode_name = None
         self._target = None
+        self._distance_for_success = distance_for_success
 
         self._make_carla_client(host, port)
 
         blueprint_library = self._world.get_blueprint_library()
-        self._vehicle_sensor_definitions = self._experiment_suite.prepare_sensors(blueprint_library)
-        self._env_sensor_definitions = OrderedDict(
+        self._vehicle_sensors_definitions = self._experiment_suite.prepare_sensors(blueprint_library)
+        self._env_sensors_definitions = OrderedDict(
             collision=(blueprint_library.find('sensor.other.collision'), Transform()),
             lane_invasion=(blueprint_library.find('sensor.other.lane_invasion'), Transform())
         )
 
-        self._distance_for_success = distance_for_success
-
-        self.done = False
-        self.last_obs = None
+        self._done = False
+        self._last_obs = None
         self._initial_timestamp = None
-        self.last_distance_to_goal = None
-        self.last_direction = None
-        self.last_snapshot = None
+
+        self._last_distance_to_goal = None
+        self._last_direction = None
+        self._last_world_snapshot = None
+        self._last_env_sensors_snapshot = None
+        self._last_vehicle_sensors_snapshot = None
+
         self._success = False
         self._failure_timeout = False
         self._failure_collision = False
-        self.benchmark = benchmark
-        self.benchmark_index = [0, 0, 0]
+
+        self._run_benchmark = benchmark
+        self._benchmark_index = [0, 0, 0]
 
         # TODO: should this be here?
         np.random.seed(random_seed)
         random.seed(random_seed)
 
-        self.steps = 0
-        self.num_episodes = 0
+        self._steps = 0
+        self._num_episodes = 0
 
     def _prepare_sensors_buffer(self):
         # based on https://github.com/carla-simulator/carla/blob/master/PythonAPI/examples/synchronous_mode.py
@@ -179,78 +184,68 @@ class CarlaAVEnv(gym.Env):
 
     def step(self, action):
 
-        if self.done:
+        if self._done:
             raise ValueError('self.done should always be False when calling step')
 
-        while True:
+        try:
+            # Send control
+            control = self._action_converter.action_to_control(
+                action, self._last_world_snapshot.find(self._ego_vehicle.id))
+            self._ego_vehicle.apply_control(control)
 
-            try:
-                # Send control
-                control = self._action_converter.action_to_control(
-                    action, self.last_snapshot.find(self._ego_vehicle.id))
-                self._ego_vehicle.apply_control(control)
+            # Move the simulation forward & get the observations
+            (self._last_world_snapshot,
+                self._last_env_sensors_snapshot,
+                self._last_vehicle_sensors_snapshot) = self._tick_the_world()
 
-                # Move the simulation forward & get the observations
-                world_snapshot, env_sensors_snapshot, vehicle_sensors_snapshot = self._tick_the_world()
+            current_timestamp = self._last_world_snapshot.timestamp
 
-                self.last_snapshot = world_snapshot
-                current_timestamp = world_snapshot.timestamp
+            self._last_distance_to_goal = self._get_distance_to_goal(self._last_world_snapshot, self._target)
 
-                distance_to_goal = self._get_distance_to_goal(world_snapshot, self._target)
-                self.last_distance_to_goal = distance_to_goal
+            self._last_direction = self._get_directions(self._last_world_snapshot,
+                                                        self._target)
 
-                directions = self._get_directions(world_snapshot,
-                                                  self._target)
-                self.last_direction = directions
+            obs = self._obs_converter.convert(
+                self._last_world_snapshot.find(self._ego_vehicle.id),
+                self._last_vehicle_sensors_snapshot,
+                self._last_env_sensors_snapshot,
+                self._last_direction,
+                self._target,
+                self._env_id
+            )
 
-                obs = self._obs_converter.convert(
-                    world_snapshot.find(self._ego_vehicle.id),
-                    vehicle_sensors_snapshot,
-                    env_sensors_snapshot,
-                    directions,
-                    self._target,
-                    self.id
-                )
+            self._last_obs = obs
 
-                self.last_obs = obs
-
-            except RGBCameraSensorException:
-                self.logger.debug('Camera Exception in step()')
-                obs = self.last_obs
-                distance_to_goal = self.last_distance_to_goal
-                current_timestamp = self.last_snapshot.timestamp
-
-            except RuntimeError as e:
-                self.logger.debug('RuntimeError inside step(): {}'.format(e))
-                self.done = True
-                return self.last_obs, 0.0, True, {'carla-reward': 0.0}
-
-            break
+        except RuntimeError as e:
+            self._logger.debug('RuntimeError inside step(): {}'.format(e))
+            self._done = True
+            return self._last_obs, 0.0, True, {'carla-reward': 0.0}
 
         # Check if terminal state
         timeout = (current_timestamp.elapsed_seconds - self._initial_timestamp.elapsed_seconds) > self._time_out
-        collision, _ = self._is_collision(env_sensors_snapshot)
-        success = distance_to_goal < self._distance_for_success
+        collision, _ = self._is_collision(self._last_env_sensors_snapshot)
+        success = self._last_distance_to_goal < self._distance_for_success
         if timeout:
-            self.logger.debug('Timeout')
+            self._logger.debug('Timeout')
             self._failure_timeout = True
         if collision:
-            self.logger.debug('Collision')
+            self._logger.debug('Collision')
             self._failure_collision = True
         if success:
-            self.logger.debug('Success')
-        self.done = timeout or collision or success
+            self._logger.debug('Success')
+        self._done = timeout or collision or success
 
         # Get the reward
         env_state = {'timeout': timeout, 'collision': collision, 'success': success}
-        reward = self._reward.get_reward(self.last_snapshot, self._target, self.last_direction, control, env_state)
+        reward = self._reward.get_reward(self._last_world_snapshot, self._target,
+                                         self._last_direction, control, env_state)
 
         # Additional information
         info = {'carla-reward': reward}
 
-        self.steps += 1
+        self._steps += 1
 
-        return obs, reward, self.done, info
+        return obs, reward, self._done, info
 
     def reset(self):
 
@@ -258,11 +253,11 @@ class CarlaAVEnv(gym.Env):
         while True:
             try:
                 self._reward.reset_reward()
-                self.done = False
+                self._done = False
 
                 self.close()
 
-                if self.benchmark:
+                if self._run_benchmark:
                     end_indicator = self._new_episode_benchmark()
                     if end_indicator is False:
                         return False
@@ -274,41 +269,37 @@ class CarlaAVEnv(gym.Env):
                 time.sleep(4)
 
                 # Move the simulation forward & get the observations
-                world_snapshot, env_sensors_snapshot, vehicle_sensors_snapshot = self._tick_the_world()
+                (self._last_world_snapshot,
+                 self._last_env_sensors_snapshot,
+                 self._last_vehicle_sensors_snapshot) = self._tick_the_world()
 
-                self._initial_timestamp = world_snapshot.timestamp
-                self.last_snapshot = world_snapshot
-                self.last_distance_to_goal = self._get_distance_to_goal(world_snapshot, self._target)
+                self._initial_timestamp = self._last_world_snapshot.timestamp
+                self._last_distance_to_goal = self._get_distance_to_goal(self._last_world_snapshot, self._target)
 
-                directions = self._get_directions(world_snapshot, self._target)
-                self.last_direction = directions
+                self._last_direction = self._get_directions(self._last_world_snapshot, self._target)
 
-                obs = self._obs_converter.convert(
-                    world_snapshot.find(self._ego_vehicle.id),
-                    vehicle_sensors_snapshot,
-                    env_sensors_snapshot,
-                    directions,
+                self._last_obs = self._obs_converter.convert(
+                    self._last_world_snapshot.find(self._ego_vehicle.id),
+                    self._last_vehicle_sensors_snapshot,
+                    self._last_env_sensors_snapshot,
+                    self._last_direction,
                     self._target,
-                    self.id
+                    self._env_id
                 )
-                self.last_obs = obs
-                self.done = False
+                self._done = False
                 self._success = False
                 self._failure_timeout = False
                 self._failure_collision = False
-                return obs
 
-            except RGBCameraSensorException:
-                self.logger.debug('Camera Exception in reset()')
-                continue
+                return self._last_obs
 
             except RuntimeError as e:
-                self.logger.debug('RuntimeError in reset()')
-                self.logger.error(e)
+                self._logger.debug('RuntimeError in reset()')
+                self._logger.error(e)
                 # Disconnect and reconnect
                 self.close()
                 time.sleep(5)
-                self._make_carla_client(self.host, self.port)
+                self._make_carla_client(self._host, self._port)
 
     def close(self):
         try:
@@ -332,8 +323,8 @@ class CarlaAVEnv(gym.Env):
                 self._client.apply_batch([command.DestroyActor(x['id']) for x in self._pedestrians] +
                                          [command.DestroyActor(x['con']) for x in self._pedestrians])
         except RuntimeError as e:
-            self.logger.debug('Error when destroying actors')
-            self.logger.error(e)
+            self._logger.debug('Error when destroying actors')
+            self._logger.error(e)
 
         self._env_sensors = {}
         self._vehicle_sensors = {}
@@ -353,14 +344,14 @@ class CarlaAVEnv(gym.Env):
         experiment = self._experiments[experiment_idx]
         idx_pose = np.random.randint(0, len(experiment.poses))
         pose = experiment.poses[idx_pose]
-        self.logger.info('Env {} gets experiment {} with pose {}'.format(self.id, experiment_idx, idx_pose))
+        self._logger.info('Env {} gets experiment {} with pose {}'.format(self._env_id, experiment_idx, idx_pose))
 
         self._new_episode_for_experiment(experiment, pose)
 
     def _new_episode_benchmark(self):
-        experiment_idx_past = self.benchmark_index[0]
-        pose_idx_past = self.benchmark_index[1]
-        repetition_idx_past = self.benchmark_index[2]
+        experiment_idx_past = self._benchmark_index[0]
+        pose_idx_past = self._benchmark_index[1]
+        repetition_idx_past = self._benchmark_index[2]
 
         experiment_past = self._experiments[experiment_idx_past]
         poses_past = experiment_past.poses[0:]
@@ -373,15 +364,15 @@ class CarlaAVEnv(gym.Env):
                 else:
                     experiment = self._experiments[experiment_idx_past + 1]
                     pose = experiment.poses[0:][0]
-                    self.benchmark_index = [experiment_idx_past + 1, 0, 1]
+                    self._benchmark_index = [experiment_idx_past + 1, 0, 1]
             else:
                 experiment = experiment_past
                 pose = poses_past[pose_idx_past + 1]
-                self.benchmark_index = [experiment_idx_past, pose_idx_past + 1, 1]
+                self._benchmark_index = [experiment_idx_past, pose_idx_past + 1, 1]
         else:
             experiment = experiment_past
             pose = poses_past[pose_idx_past]
-            self.benchmark_index = [experiment_idx_past, pose_idx_past, repetition_idx_past + 1]
+            self._benchmark_index = [experiment_idx_past, pose_idx_past, repetition_idx_past + 1]
 
         self._new_episode_for_experiment(experiment, pose)
 
@@ -430,13 +421,13 @@ class CarlaAVEnv(gym.Env):
 
         # TODO: attach all of those sensors in batch via commands?
         self._env_sensors = {}
-        for sensor_id, (blueprint, transform) in self._env_sensor_definitions.items():
+        for sensor_id, (blueprint, transform) in self._env_sensors_definitions.items():
             self._env_sensors[sensor_id] = self._world.spawn_actor(
                 blueprint, transform, attach_to=self._ego_vehicle)
 
         # attach vehicle sensors, as defined in experiment
         self._vehicle_sensors = {}
-        for sensor_id, (blueprint, transform) in self._vehicle_sensor_definitions.items():
+        for sensor_id, (blueprint, transform) in self._vehicle_sensors_definitions.items():
             self._vehicle_sensors[sensor_id] = self._world.spawn_actor(
                 blueprint, transform, attach_to=self._ego_vehicle)
 
@@ -463,7 +454,7 @@ class CarlaAVEnv(gym.Env):
         self._episode_name = str(experiment.task) + '_' + str(start_index) \
             + '_' + str(end_index)
 
-        self.num_episodes += 1
+        self._num_episodes += 1
 
     def _spawn_other_vehicles(self, positions, blueprints, number_of_vehicles, traffic_manager):
         """
@@ -487,7 +478,7 @@ class CarlaAVEnv(gym.Env):
 
         for response in self._client.apply_batch_sync(batch):
             if response.error:
-                self.logger.error(response.error)
+                self._logger.error(response.error)
             else:
                 vehicles_list.append(response.actor_id)
 
@@ -510,7 +501,7 @@ class CarlaAVEnv(gym.Env):
 
         for response in self._client.apply_batch_sync(batch, True):
             if response.error:
-                self.logger.error(response.error)
+                self._logger.error(response.error)
             else:
                 vehicles_list.append(response.actor_id)
 
@@ -563,7 +554,7 @@ class CarlaAVEnv(gym.Env):
         walker_speed2 = []
         for i in range(len(results)):
             if results[i].error:
-                self.logger.error(results[i].error)
+                self._logger.error(results[i].error)
             else:
                 walkers_list.append({"id": results[i].actor_id})
                 walker_speed2.append(walker_speed[i])
@@ -576,7 +567,7 @@ class CarlaAVEnv(gym.Env):
         results = self._client.apply_batch_sync(batch, True)
         for i in range(len(results)):
             if results[i].error:
-                self.logger.error(results[i].error)
+                self._logger.error(results[i].error)
             else:
                 walkers_list[i]["con"] = results[i].actor_id
         # 4. we put altogether the walkers and controllers id to get the objects from their id
@@ -647,14 +638,38 @@ class CarlaAVEnv(gym.Env):
 
         while True:
             try:
-                self.logger.info("Trying to make client on port {}".format(port))
+                self._logger.info("Trying to make client on port {}".format(port))
                 self._client = Client(host, port)
                 self._client.set_timeout(100)
                 self._client.load_world(self._city_name, reset_settings=True)
                 self._world = self._client.get_world()
-                self.logger.info("Successfully made client on port {}".format(port))
+                self._logger.info("Successfully made client on port {}".format(port))
                 break
             except RuntimeError as error:
-                self.logger.debug('Got RuntimeError... sleeping for 1')
-                self.logger.error(error)
+                self._logger.debug('Got RuntimeError... sleeping for 1')
+                self._logger.error(error)
                 time.sleep(1)
+
+    @property
+    def world_snapshot(self) -> WorldSnapshot:
+        return self._last_world_snapshot
+
+    @property
+    def vehicle_sensors_types(self) -> OrderedDict[str, str]:
+        return OrderedDict({k: b.type_id for k, (b, _) in self._vehicle_sensors_definitions})
+
+    @property
+    def vehicle_sensors_snapshot(self) -> Dict[str, Union[Any, List[Any]]]:
+        return self._last_vehicle_sensors_snapshot
+
+    @property
+    def env_sensors_types(self) -> OrderedDict[str, str]:
+        return OrderedDict({k: b.type_id for k, (b, _) in self._env_sensors_definitions})
+
+    @property
+    def env_sensors_snapshot(self) -> Dict[str, Union[Any, List[Any]]]:
+        return self._last_env_sensors_snapshot
+
+    @property
+    def ego_vehicle_snapshot(self) -> ActorSnapshot:
+        return self._last_world_snapshot.find(self._ego_vehicle.id)
