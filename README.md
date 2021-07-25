@@ -21,6 +21,12 @@ Also, we have thrown-in some enhancements to simplify working with VS Code (e.g.
 ### Running the CARLA Server, carlaviz & client (agents)
 Docker compose file has been prepared for the ease of running the whole setup. It will honour several env variables, most important of which are probably `USER_ID` and `GROUP_ID` that ensure proper permissions for files in the mounted `client` dir. For details please see `.env` and `docker-compose.yml`.
 
+To get everything up and running (assuming you have [Docker](https://docs.docker.com/get-started/overview/), [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/overview.html), and [NVIDIA drivers that support CUDA 11.1](https://docs.nvidia.com/deploy/cuda-compatibility/index.html) installed) the following command should be enough:
+
+```sh
+docker-compose up
+```
+
 ### Arguments and Config Files
 The `client/train.py` (or `/app/train.py` inside the container) script uses both arguments and a configuration file. The configuration file specifies all components of the model. The config file should have everything necessary to reproduce the results of a given model. The arguments of the script deal with things that are independent of the model (this includes things, like for example, ~~how often to create videos or~~ log to Tensorboard)
 
@@ -48,6 +54,8 @@ The original script won't work at the moment. We will probably create working on
 `python /app/train.py --config /app/config/her.yaml`
 
 ## carlaviz
+
+**carlaviz integration is in progress.**
 
 For in-browser visualisation to run correctly, the `carla-rl_viz_1` container's port `8081` needs to be accessible from YOUR web browser. This could probably be done by utilizing `CARLAVIZ_BACKEND_HOST` and `CARLAVIZ_BACKEND_PORT`, but since in our case the remote server is only accessible from the access node we need SSH port forwarding somewhere anyway. Used solution is: `carlaviz:8081` -> `remote_server:${CARLAVIZ_BACKEND_MAPPED_PORT:-49165}` -> `localhost:8081`
 
