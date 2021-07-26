@@ -24,13 +24,8 @@ class CollisionSensorObservations(Observations):
                              directions: RoadOption,
                              target: Transform,
                              env_id) -> np.ndarray:
-        data: Union[CollisionEvent, List[CollisionEvent]] = env_sensors['collision']
-        if data is not None:
-            if isinstance(data, list):
-                events = data
-            else:
-                events = [data]
-
+        data_seq: List[CollisionEvent] = env_sensors['collision']
+        if len(data_seq):
             vehicles = np.sum([])
             pedestrians = np.sum([])
             other = np.sum([])

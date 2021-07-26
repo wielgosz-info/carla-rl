@@ -88,49 +88,6 @@ class ExperimentSuite(object):
         return (blueprint_camera, transform_camera)
 
     @property
-    def dynamic_tasks(self):
-        """
-        Returns the episodes that contain dynamic obstacles
-        """
-        dynamic_tasks = set()
-        for exp in self._experiments:
-            if exp.number_of_vehicles > 0 or exp.number_of_pedestrians > 0:
-                dynamic_tasks.add(exp.task)
-
-        return list(dynamic_tasks)
-
-    @property
-    def metrics_parameters(self):
-        """
-        Property to return the parameters for the metric module
-        Could be redefined depending on the needs of the user.
-        """
-        return {
-
-            'intersection_offroad': {'frames_skip': 10,
-                                     'frames_recount': 20,
-                                     'threshold': 0.3
-                                     },
-            'intersection_otherlane': {'frames_skip': 10,
-                                       'frames_recount': 20,
-                                       'threshold': 0.4
-                                       },
-            'collision_other': {'frames_skip': 10,
-                                'frames_recount': 20,
-                                'threshold': 400
-                                },
-            'collision_vehicles': {'frames_skip': 10,
-                                   'frames_recount': 30,
-                                   'threshold': 400
-                                   },
-            'collision_pedestrians': {'frames_skip': 5,
-                                      'frames_recount': 100,
-                                      'threshold': 300
-                                      },
-
-        }
-
-    @property
     def weathers(self):
         weathers = set(self.train_weathers)
         weathers.update(self.test_weathers)

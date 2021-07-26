@@ -10,8 +10,8 @@ import queue
 from agents.navigation.global_route_planner import GlobalRoutePlanner
 from agents.navigation.global_route_planner_dao import GlobalRoutePlannerDAO
 from agents.tools.misc import compute_distance
-from carla import (Client, LaneChange, LaneMarkingType, Transform, VehicleControl,
-                   WorldSettings, WorldSnapshot, ActorSnapshot, command)
+from carla import (Client, LaneChange, LaneMarkingType, Transform, VehicleControl, SensorData,
+                   WorldSettings, WorldSnapshot, ActorSnapshot, TrafficManager, World, command)
 
 from gym_carla import rewards
 from carla_logger import get_carla_logger
@@ -41,8 +41,7 @@ class CarlaAVEnv(gym.Env):
                  city_name='Town01',
                  subset=None,
                  distance_for_success=2.0,
-                 benchmark=False,
-                 wait_for_data_timeout=1.0
+                 benchmark=False
                  ):
 
         self._logger = get_carla_logger()
@@ -59,22 +58,24 @@ class CarlaAVEnv(gym.Env):
         self._reward = getattr(rewards, reward_class_name)(self._obs_converter)
 
         self._host, self._port = host, port
+        self._synchronous = True
         self._world_settings = WorldSettings(
-            synchronous_mode=True,
-            fixed_delta_seconds=0.05,  # 20 FPS; fixed_delta_seconds <= max_substep_delta_time * max_substeps
+            synchronous_mode=self._synchronous,
+            fixed_delta_seconds=0.1,  # 10 FPS; fixed_delta_seconds <= max_substep_delta_time * max_substeps
             substepping=True,
             max_substep_delta_time=0.01,
             max_substeps=10
         )
-        self._client = None
-        self._world = None
+        self._client: Client = None
+        self._world: World = None
+        self._traffic_manager: TrafficManager = None
         self._dao = None  # Needs to be reset after new world is loaded
         self._planner = None  # Needs DAO
         self._env_sensors = {}  # Sensors needed to manage env/generate observations
         self._vehicle_sensors = {}  # Sensors available to Vehicle
 
-        self._sensors_buffer = {}
-        self._wait_for_data_timeout = wait_for_data_timeout
+        self._sensors_buffer: OrderedDict[str, queue.Queue] = {}
+        self._sensors_buffer_top: Dict[str, SensorData] = {}
 
         # TODO: experiment suite should be a param (or a separate env if there is a lot of logic involved),
         # not this kind of weird switch...
@@ -93,6 +94,7 @@ class CarlaAVEnv(gym.Env):
         self._ego_vehicle = None
 
         self._time_out = None
+        self._shortest_path = []
         self._target = None
         self._distance_for_success = distance_for_success
 
@@ -123,8 +125,9 @@ class CarlaAVEnv(gym.Env):
         self._benchmark_index = [0, 0, 0]
 
         # TODO: should this be here?
-        np.random.seed(random_seed)
-        random.seed(random_seed)
+        self._random_seed = random_seed
+        np.random.seed(self._random_seed)
+        random.seed(self._random_seed)
 
         self._steps = 0
         self._num_episodes = 0
@@ -144,36 +147,48 @@ class CarlaAVEnv(gym.Env):
         for key, sensor in self._env_sensors.items():
             make_queue(key, sensor.listen)
 
-        make_queue('world_snapshot', self._world.on_tick)
-
         return buffer
 
     def _get_data_from_buffer(self, key, frame):
-        # based on https://github.com/carla-simulator/carla/blob/master/PythonAPI/examples/synchronous_mode.py
-        # but in case of event-based sensors there can be none or multiple data per frame
-        try:
-            while True:
-                data = self._sensors_buffer[key].get(timeout=self._wait_for_data_timeout)
-                if data.frame == frame:
-                    # this was the only thing in queue
-                    if self._sensors_buffer[key].empty():
-                        return data
-                    else:
-                        seq = [data]
-                        while not self._sensors_buffer[key].empty():
-                            # this should never timeout
-                            seq.append(self._sensors_buffer[key].get(timeout=self._wait_for_data_timeout))
-                        return seq
-        except queue.Empty:
-            return None
+        '''
+        Gets the data from queue.
+
+        We handle sensors data the same no matter the sync/async mode,
+        i.e. if the data is not available we skip it (without waiting).
+        The observation converter should decide what to return
+        when no data is available.
+        '''
+        data_seq = []
+
+        if self._sensors_buffer_top[key] is not None:
+            if self._sensors_buffer_top[key].frame <= frame:
+                data_seq.append(self._sensors_buffer_top[key])
+                self._sensors_buffer_top[key] = None
+            else:
+                return data_seq
+
+        while not self._sensors_buffer[key].empty():
+            data = self._sensors_buffer[key].get_nowait()
+            if data.frame <= frame:
+                data_seq.append(data)
+            else:
+                self._sensors_buffer_top[key] = data
+                break
+
+        return data_seq
 
     def _tick_the_world(self):
-        # based on https://github.com/carla-simulator/carla/blob/master/PythonAPI/examples/synchronous_mode.py
-        frame = self._world.tick()
+        if self._synchronous:
+            frame = self._world.tick()
+            world_snapshot = self._world.get_snapshot()
+            assert world_snapshot.frame == frame
+        else:
+            world_snapshot = self._world.wait_for_tick()
+            frame = world_snapshot.frame
 
         # some sensors (like collision or lane_invasion) will return no data!
         return (
-            self._get_data_from_buffer('world_snapshot', frame),
+            world_snapshot,
             {
                 k: self._get_data_from_buffer(k, frame) for k in self._env_sensors.keys()
             },
@@ -223,7 +238,7 @@ class CarlaAVEnv(gym.Env):
 
         # Check if terminal state
         timeout = (current_timestamp.elapsed_seconds - self._initial_timestamp.elapsed_seconds) > self._time_out
-        collision, _ = self._is_collision(self._last_env_sensors_snapshot)
+        collision, _ = self._is_collision_or_invasion(self._last_env_sensors_snapshot)
         success = self._last_distance_to_goal < self._distance_for_success
         if timeout:
             self._logger.debug('Timeout')
@@ -263,10 +278,6 @@ class CarlaAVEnv(gym.Env):
                         return False
                 else:
                     self._new_episode()
-
-                # Hack: Try sleeping so that the server is ready. Reduces the number of TCPErrors
-                # TODO: Possibly not needed now?
-                time.sleep(4)
 
                 # Move the simulation forward & get the observations
                 (self._last_world_snapshot,
@@ -317,8 +328,8 @@ class CarlaAVEnv(gym.Env):
             if len(vehicles_ids):
                 self._client.apply_batch([command.DestroyActor(x) for x in vehicles_ids])
 
-            for pedestrian in self._pedestrians:
-                self._world.find(pedestrian['con']).stop()
+            for controller in self._world.get_actors([p['con'] for p in self._pedestrians]):
+                controller.stop()
             if len(self._pedestrians):
                 self._client.apply_batch([command.DestroyActor(x['id']) for x in self._pedestrians] +
                                          [command.DestroyActor(x['con']) for x in self._pedestrians])
@@ -331,6 +342,12 @@ class CarlaAVEnv(gym.Env):
         self._ego_vehicle = None
         self._other_vehicles = []
         self._pedestrians = []
+
+        # TODO: this will probably need to be moved when running multi-agent
+        if self._world:
+            self._world.apply_settings(WorldSettings(synchronous_mode=False))
+        if self._traffic_manager:
+            self._traffic_manager.set_synchronous_mode(False)
 
     def render(self, mode, **kwargs):
         '''
@@ -401,11 +418,6 @@ class CarlaAVEnv(gym.Env):
         self._planner = GlobalRoutePlanner(self._dao)
         self._planner.setup()  # retrieve topology from server
 
-        traffic_manager = self._client.get_trafficmanager()
-        traffic_manager.set_hybrid_physics_mode(True)
-        traffic_manager.set_random_device_seed(experiment.seed)
-        traffic_manager.set_synchronous_mode(True)
-
         positions = self._world.get_map().get_spawn_points()
         start_index = pose[0]
         end_index = pose[1]
@@ -439,13 +451,13 @@ class CarlaAVEnv(gym.Env):
 
         # reset sensor buffers
         self._sensors_buffer = self._prepare_sensors_buffer()
+        self._sensors_buffer_top = {k: None for k in self._sensors_buffer.keys()}
 
         # add other vehicles according to experiment settings
         self._other_vehicles = self._spawn_other_vehicles(
             positions[0:start_index]+positions[start_index:],
             blueprints_vehicles,
-            experiment.number_of_vehicles,
-            traffic_manager
+            experiment.number_of_vehicles
         )
 
         # add pedestrians according to experiment settings
@@ -454,15 +466,16 @@ class CarlaAVEnv(gym.Env):
             experiment.number_of_pedestrians
         )
 
+        self._shortest_path = self._get_shortest_path(positions[start_index], positions[end_index])
         self._time_out = self._experiment_suite.calculate_time_out(
-            self._get_shortest_path(positions[start_index], positions[end_index]))
+            len(self._shortest_path) * self._dao.get_resolution())
         self._target = positions[end_index]
         self._episode_name = str(experiment.task) + '_' + str(start_index) \
             + '_' + str(end_index)
 
         self._num_episodes += 1
 
-    def _spawn_other_vehicles(self, positions, blueprints, number_of_vehicles, traffic_manager):
+    def _spawn_other_vehicles(self, positions, blueprints, number_of_vehicles):
         """
         Spawn Vehicles
 
@@ -502,7 +515,7 @@ class CarlaAVEnv(gym.Env):
 
             # spawn the cars and set their autopilot and light state all together
             batch.append(command.SpawnActor(blueprint, transform)
-                         .then(command.SetAutopilot(command.FutureActor, True, traffic_manager.get_port()))
+                         .then(command.SetAutopilot(command.FutureActor, True, self._traffic_manager.get_port()))
                          )
 
         for response in self._client.apply_batch_sync(batch, True):
@@ -608,26 +621,19 @@ class CarlaAVEnv(gym.Env):
     def _get_shortest_path(self, start_point, end_point):
         # TODO: check if 'route' will in fact contain waypoint-by-waypoint navigation
         # and we can use it to calculate distance
-        route = self._planner.trace_route(start_point.location, end_point.location)
-        return len(route) * self._dao.get_resolution()
+        return self._planner.trace_route(start_point.location, end_point.location)
 
     @ staticmethod
-    def _is_collision(env_sensors_snapshot):
+    def _is_collision_or_invasion(env_sensors_snapshot):
 
         collisions = []
-        if env_sensors_snapshot['collision'] is not None:
-            if isinstance(env_sensors_snapshot['collision'], list):
-                collisions = env_sensors_snapshot['collision']
-            else:
-                collisions = [env_sensors_snapshot['collision']]
+        if len(env_sensors_snapshot['collision']):
+            collisions = env_sensors_snapshot['collision']
 
         invasions = []
-        if env_sensors_snapshot['lane_invasion'] is not None:
-            if isinstance(env_sensors_snapshot['lane_invasion'], list):
-                invasions = [].extend(
-                    [invasion.crossed_lane_markings for invasion in env_sensors_snapshot['lane_invasion']])
-            else:
-                invasions = env_sensors_snapshot['lane_invasion'].crossed_lane_markings
+        if len(env_sensors_snapshot['lane_invasion']):
+            for inv in env_sensors_snapshot['lane_invasion']:
+                invasions.extend(inv.crossed_lane_markings)
 
         # no way to get those in new CARLA?: intersection_offroad, intersection_otherlane
         # let just count the invasions... TODO: should LaneMarkingType.BrokenSolid count?
@@ -641,14 +647,19 @@ class CarlaAVEnv(gym.Env):
         return len(collisions) or len(invasions_curb_or_grass) or len(invasions_solid), collisions
 
     def _make_carla_client(self, host, port):
-
         while True:
             try:
                 self._logger.info("Trying to make client on port {}".format(port))
                 self._client = Client(host, port)
-                self._client.set_timeout(100)
+                self._client.set_timeout(10)
                 self._client.load_world(self._city_name, reset_settings=True)
                 self._world = self._client.get_world()
+                self._traffic_manager = self._client.get_trafficmanager()
+                # TODO: set_synchronous_mode needs to be set only in env that does the world tick!
+                self._traffic_manager.set_synchronous_mode(self._synchronous)
+                self._traffic_manager.set_hybrid_physics_mode(True)
+                if self._synchronous:
+                    self._traffic_manager.set_random_device_seed(self._random_seed)
                 self._logger.info("Successfully made client on port {}".format(port))
                 break
             except RuntimeError as error:
@@ -679,3 +690,7 @@ class CarlaAVEnv(gym.Env):
     @property
     def ego_vehicle_snapshot(self) -> ActorSnapshot:
         return self._last_world_snapshot.find(self._ego_vehicle.id)
+
+    @property
+    def shortest_path(self) -> List:
+        return self._shortest_path

@@ -236,7 +236,7 @@ def main():
 
             if done.any():
                 total_episodes += done.sum()
-                torch_done = torch.tensor(done.astype(int)).byte()
+                torch_done = torch.tensor(done.astype(bool))
                 mean_episode_reward = episode_reward[torch_done].mean().item()
                 logger.info('{} episode(s) finished with reward {}'.format(done.sum(), mean_episode_reward))
                 writer.add_scalar('train/mean_ep_reward_vs_steps', mean_episode_reward, total_steps)

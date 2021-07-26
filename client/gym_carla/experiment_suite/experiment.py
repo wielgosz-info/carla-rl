@@ -17,7 +17,6 @@ class Experiment(object):
     Number Of Vehicles
     Number Of Pedestrians
     Weather
-    Random Seed for the Traffic Manager
 
     """
 
@@ -30,7 +29,6 @@ class Experiment(object):
         self._repetitions: int = 1
         self._number_of_vehicles: int = 20
         self._number_of_pedestrians: int = 30
-        self._seed: int = 123456789
 
     def set(self, **kwargs):
         for key, value in kwargs.items():
@@ -83,7 +81,3 @@ class Experiment(object):
     @property
     def map_name(self):
         return self._map_name
-
-    @property
-    def seed(self):
-        return self._seed

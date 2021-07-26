@@ -37,6 +37,10 @@ class CarlaVizRenderWrapper(gym.Wrapper):
 
     def render(self, mode='human', **kwargs):
         if mode == 'human':
+            # draw shortest path
+            if len(self.env.shortest_path):
+                self.__painter.draw_polylines(self.__shortest_path_to_trajectory(), color='#ffffff', width=0.5)
+
             # draw trajectories
             if len(self.__trajectories[0]):
                 self.__painter.draw_polylines(self.__trajectories)
@@ -54,3 +58,6 @@ class CarlaVizRenderWrapper(gym.Wrapper):
     def close(self):
         super().close()
         self.__painter.close()
+
+    def __shortest_path_to_trajectory(self):
+        return [[[w[0].transform.location.x, w[0].transform.location.y, w[0].transform.location.z] for w in self.env.shortest_path]]

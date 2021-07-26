@@ -2,7 +2,7 @@ import gym
 import numpy as np
 from PIL import Image as PILImage
 from gym_carla.converters.observations.observations import Observations
-from typing import Dict
+from typing import Dict, List
 from carla import ActorSnapshot, ColorConverter, Transform, Image
 from agents.navigation.local_planner import RoadOption
 
@@ -37,8 +37,9 @@ class RGBCameraSensorObservations(Observations):
                              directions: RoadOption,
                              target: Transform,
                              env_id) -> np.ndarray:
-        data: Image = vehicle_sensors[self.__sensor_id]
-        if data is not None:
+        data_seq: List[Image] = vehicle_sensors[self.__sensor_id]
+        if len(data_seq):
+            data = data_seq[-1]  # we only care about most recent frame
             try:
                 # convert image in-place
                 data.convert(ColorConverter.Raw)
