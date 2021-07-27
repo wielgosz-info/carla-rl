@@ -21,7 +21,7 @@ Also, we have thrown-in some enhancements to simplify working with VS Code (e.g.
 ### Running the CARLA Server, carlaviz & client (agents)
 Docker compose file has been prepared for the ease of running the whole setup. It will honour several env variables, most important of which are probably `USER_ID` and `GROUP_ID` that ensure proper permissions for files in the mounted `client` dir. For details please see `.env` and `docker-compose.yml`.
 
-To get everything up and running (assuming you have [Docker](https://docs.docker.com/get-started/overview/), [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/overview.html), and [NVIDIA drivers that support CUDA 11.1](https://docs.nvidia.com/deploy/cuda-compatibility/index.html) installed) the following command should be enough:
+To get everything up and running (assuming you have [Docker](https://docs.docker.com/get-started/overview/), [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/overview.html), and [NVIDIA drivers that support CUDA 11.1](https://docs.nvidia.com/deploy/cuda-compatibility/index.html) installed) the following command executed in the root `carla-rl` dir should be enough:
 
 ```sh
 docker-compose -f "docker-compose.yml" up -d --build
@@ -38,35 +38,35 @@ The original script won't work at the moment. We will probably create working on
 ## Benchmark Results
 
 ### A2C
-~~To reproduce our results,~~ run a CARLA server and inside the `carla-rl_client_1` container run,
+~~To reproduce our results, run a CARLA server and~~ Inside the `carla-rl_client_1` container run,
 `python3 /app/train.py --config /app/config/a2c.yaml`
 
 ### ACKTR
-~~To reproduce our results,~~ run a CARLA server and inside the `carla-rl_client_1` docker run,
+~~To reproduce our results, run a CARLA server and~~ Inside the `carla-rl_client_1` docker run,
 `python /app/train.py --config /app/config/acktr.yaml`
 
 ### PPO
-~~To reproduce our results,~~ run a CARLA server and inside the `carla-rl_client_1` docker run,
+~~To reproduce our results, run a CARLA server and~~ Inside the `carla-rl_client_1` docker run,
 `python /app/train.py --config /app/config/ppo.yaml`
 
 ### On-Policy HER
-~~To reproduce our results,~~ run a CARLA server and inside the `carla-rl_client_1` docker run,
+~~To reproduce our results, run a CARLA server and~~ Inside the `carla-rl_client_1` docker run,
 `python /app/train.py --config /app/config/her.yaml`
 
 ## carlaviz
 
 **carlaviz integration is in progress.**
 
-For in-browser visualisation to run correctly, the `carla-rl_viz_1` container's port `8081` needs to be accessible from YOUR web browser. This could probably be done by utilizing `CARLAVIZ_BACKEND_HOST` and `CARLAVIZ_BACKEND_PORT`, but since in our case the remote server is only accessible from the access node we need SSH port forwarding somewhere anyway. Used solution is: `carlaviz:8081` -> `remote_server:${CARLAVIZ_BACKEND_MAPPED_PORT:-49165}` -> `localhost:8081`
+For in-browser visualisation to run correctly, the `carla-rl_viz_1` container's port `8081` needs to be accessible from YOUR web browser. This could probably be done by utilizing `CARLAVIZ_BACKEND_HOST` and `CARLAVIZ_BACKEND_PORT`, but since in our case the remote server is only accessible from the access node we need SSH port forwarding somewhere anyway. Used solution is: `carla-rl_viz_1:8081` -> `remote_server:${CARLAVIZ_BACKEND_MAPPED_PORT:-49165}` -> `localhost:8081`
 
 Example `.ssh/config` to achieve this:
 
 ```ssh-config
 Host forward_carlaviz_backend
-    HostName remote_server
+    HostName remote_server_domain_or_ip
     LocalForward 8081 127.0.0.1:49165
-    User username
-    ProxyJump username@access_node
+    User remote_server_username
+    ProxyJump access_node_username@access_node_domain_or_ip
     ServerAliveInterval 30
     ServerAliveCountMax 3
 ```
@@ -80,3 +80,11 @@ ssh -N forward_carlaviz_backend
 We could handle the `carlaviz:8080` port forwarding similarly, but VS Code can do it for us with a click of a button, so there's no need.
 
 **Important note: if you need to restart the carlaviz container, kill the forwarding first, then restart carlaviz and wait for it to be running, and only then start forwarding again. Otherwise you will get stuck with "Launch the backend and refresh" message in the browser.**
+
+## License
+MIT License
+
+## Authors
+- original [Carla RL Project](https://github.com/carla-rl-gym/carla-rl) authors
+- Maciej Wielgosz, lead scientist ;)
+- Urszula Wielgosz, chief software engineer, Docker how-to-do-it askperson, VS Code configurer and primary coffee consumer
