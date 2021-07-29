@@ -1,9 +1,12 @@
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, List
+from functools import lru_cache
 
 import gym
 import numpy as np
 
 from .carla_painter import CarlaPainter
+from agents.navigation.local_planner import RoadOption
+from carla import Waypoint
 
 
 class CarlaVizRenderWrapper(gym.Wrapper):
@@ -20,10 +23,10 @@ class CarlaVizRenderWrapper(gym.Wrapper):
         self.metadata['render.modes'] = list(set(self.metadata['render.modes']))
 
         self.__painter = CarlaPainter('viz', 8089)
-        self.__trajectories = [[]]
+        self.__car_trajectory = []
 
     def reset(self, **kwargs) -> gym.spaces.Space:
-        self.__trajectories = [[]]
+        self.__car_trajectory = []
         return super().reset(**kwargs)
 
     def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
@@ -31,27 +34,30 @@ class CarlaVizRenderWrapper(gym.Wrapper):
 
         # remember all points for trajectories, even if render is only called sometimes
         ego_location = self.env.ego_vehicle_snapshot.get_transform().location
-        self.__trajectories[0].append([ego_location.x, ego_location.y, ego_location.z])
+        self.__car_trajectory.append([ego_location.x, ego_location.y, ego_location.z])
 
         return res
 
     def render(self, mode='human', **kwargs):
         if mode == 'human':
-            # draw shortest path
+            trajectories = []
+
+            # needs to be first to be below
             if len(self.env.shortest_path):
-                self.__painter.draw_polylines(self.__shortest_path_to_trajectory(), color='#ffffff', width=0.5)
+                trajectories.append(self.__shortest_path_to_trajectory(self.env.shortest_path))
+
+            trajectories.append(self.__car_trajectory)
 
             # draw trajectories
-            if len(self.__trajectories[0]):
-                self.__painter.draw_polylines(self.__trajectories)
+            # TODO: change those to dict with individual colors and widths when carlaviz is updated
+            self.__painter.draw_polylines(trajectories)
 
-            # draw ego vehicle's velocity & location just above the ego vehicle
-            ego_velocity = self.env.ego_vehicle_snapshot.get_velocity()
-            ego_location = self.env.ego_vehicle_snapshot.get_transform().location
-            velocity_str = "{:.2f}, ".format(ego_velocity.x) + "{:.2f}".format(ego_velocity.y) \
-                + ", {:.2f}".format(ego_velocity.z)
-            self.__painter.draw_texts([velocity_str],
-                                      [[ego_location.x, ego_location.y, ego_location.z + 10.0]], size=20)
+            # draw the current direction that the vehicle received
+            if self.env.shortest_path:
+                ego_location = self.env.ego_vehicle_snapshot.get_transform().location
+                next_dir_str = "{:s}".format(RoadOption(self.env.shortest_path[0][1]).name)
+                self.__painter.draw_texts([next_dir_str],
+                                          [[ego_location.x, ego_location.y, ego_location.z + 10.0]], size=20)
 
         return self.env.render(mode, **kwargs)
 
@@ -59,5 +65,6 @@ class CarlaVizRenderWrapper(gym.Wrapper):
         super().close()
         self.__painter.close()
 
-    def __shortest_path_to_trajectory(self):
-        return [[[w[0].transform.location.x, w[0].transform.location.y, w[0].transform.location.z] for w in self.env.shortest_path]]
+    @lru_cache(maxsize=1)
+    def __shortest_path_to_trajectory(self, shortest_path: List[Tuple[Waypoint, RoadOption]]):
+        return [[w[0].transform.location.x, w[0].transform.location.y, w[0].transform.location.z] for w in shortest_path]

@@ -19,6 +19,8 @@ class CarlaPainter(object):
 
     def draw_polylines(self, lines, color='#00FF00', width=2.5):
         """Draw several polylines in the CarlaViz frontend
+           Please note that all subsequent calls overwrite the previous ones, not add to them,
+           so you should call it only once while handling the tick.
 
         Args:
             lines (list): list of polylines to draw. Should be in the format of
@@ -37,15 +39,7 @@ class CarlaPainter(object):
             self._logger.warning('no lines will be drawn')
             return
         if isinstance(lines[0], list) and not isinstance(lines[0][0], list):
-            data_dict = {}
-            data_dict['type'] = 'line'
-            data_dict['vertices'] = [lines]
-            data_dict['color'] = color
-            data_dict['width'] = width
-            try:
-                self._ws.send(json.dumps(data_dict))
-            except Exception as e:
-                self._logger.warning(e)
+            self._draw_polylines([lines], color, width)
         else:
             self._draw_polylines(lines, color, width)
 
