@@ -48,6 +48,7 @@ class CarlaAVEnv(gym.Env):
         self._logger.info('Environment {} running in port {}'.format(env_id, port))
 
         self._env_id = env_id
+        self._random_seed = random_seed
 
         self._obs_converter = obs_converter
         self._action_converter = action_converter
@@ -61,7 +62,7 @@ class CarlaAVEnv(gym.Env):
         self._synchronous = True
         self._world_settings = WorldSettings(
             synchronous_mode=self._synchronous,
-            fixed_delta_seconds=0.1,  # 10 FPS; fixed_delta_seconds <= max_substep_delta_time * max_substeps
+            fixed_delta_seconds=0.05,  # 10 FPS; fixed_delta_seconds <= max_substep_delta_time * max_substeps
             substepping=True,
             max_substep_delta_time=0.01,
             max_substeps=10
@@ -125,7 +126,6 @@ class CarlaAVEnv(gym.Env):
         self._benchmark_index = [0, 0, 0]
 
         # TODO: should this be here?
-        self._random_seed = random_seed
         np.random.seed(self._random_seed)
         random.seed(self._random_seed)
 
