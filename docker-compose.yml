@@ -29,7 +29,7 @@ services:
               device_ids: ['${CARLA_SERVER_GPU_ID:-0}']
               capabilities: ['compute','graphics','utility']
   viz:
-    image: wielgoszinfo/carlaviz:0.9.11
+    image: wielgoszinfo/carlaviz:0.9.11-develop
     entrypoint: ["/bin/bash", "-c", "sleep 10 && ./docker/run.sh"]
     expose:
       - 8089

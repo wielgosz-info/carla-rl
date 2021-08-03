@@ -18,15 +18,17 @@ class CarlaPainter(object):
         self._logger.info("Connected to drawing server at %s:%d" % (host, port))
 
     def draw_polylines(self, lines, color='#00FF00', width=2.5):
-        """Draw several polylines in the CarlaViz frontend
-           Please note that all subsequent calls overwrite the previous ones, not add to them,
+        """Draw several polylines in the CarlaViz frontend.
+
+        Please note that all subsequent calls overwrite the previous ones, not add to them,
            so you should call it only once while handling the tick.
 
         Args:
             lines (list): list of polylines to draw. Should be in the format of
                           [line_1, line_2, line_3...]. Every line should be in the
-                          format of [point_1, point_2, point_3...]. Every point should
-                          be in the format of [p_x, p_y, p_z].
+                          format of [point_1, point_2, point_3...] or
+                          { vertices: [point_1, point_2, point_3...], color: '#FFFFFF', width: 1.0}.
+                          Every point should be in the format of [p_x, p_y, p_z].
             color (str, optional): color represented in str. Defaults to '#00FF00'.
             width (float, optional): line width. Defaults to 2.5.
 

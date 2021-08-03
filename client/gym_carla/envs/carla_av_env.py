@@ -1,3 +1,4 @@
+from agents.navigation.local_planner import RoadOption
 from gym_carla.converters.observations.sensors.camera.rgb import RGBCameraSensorException
 import random
 import time
@@ -619,8 +620,6 @@ class CarlaAVEnv(gym.Env):
         return directions[0]
 
     def _get_shortest_path(self, start_point, end_point):
-        # TODO: check if 'route' will in fact contain waypoint-by-waypoint navigation
-        # and we can use it to calculate distance
         return self._planner.trace_route(start_point.location, end_point.location)
 
     @ staticmethod
@@ -694,3 +693,7 @@ class CarlaAVEnv(gym.Env):
     @property
     def shortest_path(self) -> List:
         return self._shortest_path
+
+    @property
+    def direction(self) -> RoadOption:
+        return self._last_direction
