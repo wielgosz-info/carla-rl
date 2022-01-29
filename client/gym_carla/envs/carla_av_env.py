@@ -9,7 +9,6 @@ import numpy as np
 import queue
 
 from agents.navigation.global_route_planner import GlobalRoutePlanner
-from agents.navigation.global_route_planner_dao import GlobalRoutePlannerDAO
 from agents.tools.misc import compute_distance
 from carla import (Client, LaneChange, LaneMarkingType, Transform, VehicleControl, SensorData,
                    WorldSettings, WorldSnapshot, ActorSnapshot, TrafficManager, World, command)
@@ -71,8 +70,7 @@ class CarlaAVEnv(gym.Env):
         self._client: Client = None
         self._world: World = None
         self._traffic_manager: TrafficManager = None
-        self._dao = None  # Needs to be reset after new world is loaded
-        self._planner = None  # Needs DAO
+        self._planner = None
         self._env_sensors = {}  # Sensors needed to manage env/generate observations
         self._vehicle_sensors = {}  # Sensors available to Vehicle
 
@@ -412,12 +410,11 @@ class CarlaAVEnv(gym.Env):
         self._world.apply_settings(self._world_settings)
         self._world.set_weather(experiment.weather)
 
-        self._dao = GlobalRoutePlannerDAO(
+        self._planner = GlobalRoutePlanner(
             self._world.get_map(),
             0.2  # in meters
         )
-        self._planner = GlobalRoutePlanner(self._dao)
-        self._planner.setup()  # retrieve topology from server
+        # self._planner.setup()  # retrieve topology from server
 
         positions = self._world.get_map().get_spawn_points()
         start_index = pose[0]
@@ -469,7 +466,7 @@ class CarlaAVEnv(gym.Env):
 
         self._shortest_path = self._get_shortest_path(positions[start_index], positions[end_index])
         self._time_out = self._experiment_suite.calculate_time_out(
-            len(self._shortest_path) * self._dao.get_resolution())
+            len(self._shortest_path) * 0.2)  # 0.2 == sampling_resolution
         self._target = positions[end_index]
         self._episode_name = str(experiment.task) + '_' + str(start_index) \
             + '_' + str(end_index)
@@ -613,11 +610,11 @@ class CarlaAVEnv(gym.Env):
         return walkers_list
 
     def _get_directions(self, world_snapshot: WorldSnapshot, end_point: Transform):
-        directions = self._planner.abstract_route_plan(
+        directions = self._planner.trace_route(
             world_snapshot.find(self._ego_vehicle.id).get_transform().location,
             end_point.location
         )
-        return directions[0]
+        return directions[0][1]
 
     def _get_shortest_path(self, start_point, end_point):
         return self._planner.trace_route(start_point.location, end_point.location)

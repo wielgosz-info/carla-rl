@@ -39,19 +39,19 @@ The original script won't work at the moment. We will probably create working on
 
 ### A2C
 ~~To reproduce our results, run a CARLA server and~~ Inside the `carla-rl_client_1` container run,
-`python3 /app/train.py --config /app/config/a2c.yaml`
+`/venv/bin/python /app/train.py --config /app/config/a2c.yaml`
 
 ### ACKTR
 ~~To reproduce our results, run a CARLA server and~~ Inside the `carla-rl_client_1` docker run,
-`python /app/train.py --config /app/config/acktr.yaml`
+`/venv/bin/python /app/train.py --config /app/config/acktr.yaml`
 
 ### PPO
 ~~To reproduce our results, run a CARLA server and~~ Inside the `carla-rl_client_1` docker run,
-`python /app/train.py --config /app/config/ppo.yaml`
+`/venv/bin/python /app/train.py --config /app/config/ppo.yaml`
 
 ### On-Policy HER
 ~~To reproduce our results, run a CARLA server and~~ Inside the `carla-rl_client_1` docker run,
-`python /app/train.py --config /app/config/her.yaml`
+`/venv/bin/python /app/train.py --config /app/config/her.yaml`
 
 ## carlaviz
 
@@ -62,8 +62,9 @@ For in-browser visualisation to run correctly, the `carla-rl_viz_1` container's 
 Example `.ssh/config` to achieve this:
 
 ```ssh-config
-Host forward_carlaviz_backend
+Host forward_carlaviz
     HostName remote_server_domain_or_ip
+    LocalForward 8080 127.0.0.1:49164
     LocalForward 8081 127.0.0.1:49165
     User remote_server_username
     ProxyJump access_node_username@access_node_domain_or_ip
@@ -71,13 +72,11 @@ Host forward_carlaviz_backend
     ServerAliveCountMax 3
 ```
 
-and run (optionaly add `-v` to see what's happening):
+and run (optionally add `-v` to see what's happening):
 
 ```sh
-ssh -N forward_carlaviz_backend
+ssh -N forward_carlaviz
 ```
-
-We could handle the `carlaviz:8080` port forwarding similarly, but VS Code can do it for us with a click of a button, so there's no need.
 
 **Important note: if you need to restart the carlaviz container, kill the forwarding first, then restart carlaviz and wait for it to be running, and only then start forwarding again. Otherwise you will get stuck with "Launch the backend and refresh" message in the browser.**
 

@@ -36,11 +36,10 @@ class DirectionsObservations(Observations):
         # check if we should flag REACH_GOAL
         vehicle_transform = player_snapshot.get_transform()
         if is_within_distance(
-            target.location,
-            vehicle_transform.location,
-            vehicle_transform.rotation,
+            target,
+            vehicle_transform,
             0.5,  # TODO: for now I set it to 0.5m (I'm assuming it's meters here...)
-            5, -5  # allow some small angle variations ( +/-5deg). TODO: what values make sense here?
+            5  # allow some small angle variations ( +/-5deg). TODO: what values make sense here?
         ):
             obs[0] = 1.0
             return obs
