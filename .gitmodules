@@ -1,0 +1,6 @@
+[submodule "carla-common"]
+	path = carla-common
+	url = https://github.com/wielgosz-info/carla-common.git
+[submodule "carlaviz"]
+	path = carlaviz
+	url = https://github.com/wielgosz-info/carlaviz.git

@@ -21,13 +21,37 @@ Also, we have thrown-in some enhancements to simplify working with VS Code (e.g.
 ### Running the CARLA Server, carlaviz & client (agents)
 Docker compose file has been prepared for the ease of running the whole setup. It will honour several env variables, most important of which are probably `USER_ID` and `GROUP_ID` that ensure proper permissions for files in the mounted `client` dir. For details please see `.env` and `docker-compose.yml`.
 
-To get everything up and running (assuming you have [Docker](https://docs.docker.com/get-started/overview/), [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/overview.html), and [NVIDIA drivers that support CUDA 11.1](https://docs.nvidia.com/deploy/cuda-compatibility/index.html) installed) the following command executed in the root `carla-rl` dir should be enough:
+To get everything up and running (assuming you have [Docker](https://docs.docker.com/get-started/overview/), [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/overview.html), and [NVIDIA drivers that support CUDA 11.1](https://docs.nvidia.com/deploy/cuda-compatibility/index.html) installed), you need to
+follow three steps:
 
+#### 1. Build carla-common image
+You should build the `carla-common` image first, since this project Dockerfile have been updated to use it.
+It is a one-time step (unless you will need to update it in the future).
 ```sh
-docker-compose -f "docker-compose.yml" up -d --build
+cd carla-common && \
+docker-compose -f docker-compose.yml build && \
+cd ..
 ```
 
-### Arguments and Config Files
+#### 2. Build carlaviz image
+You should also build the `carlaviz` image, since the envs use it for visualization.
+We use a fork of the official carlaviz repo, which has been updated to use the latest CARLA 0.9.13 version
+and has some additional features thrown in.
+It is a one-time step (unless you will need to update it in the future).
+```sh
+cd carlaviz && \
+git submodule update --init --recursive && \
+docker-compose -f docker-compose.yml -f ../carla-common/server/docker-compose.yml build \
+cd ..
+```
+
+#### 3. Build the client image
+Finally, build the client image. The following command executed in the root `carla-rl` dir should be enough:
+```sh
+docker-compose -f "docker-compose.yml" -f "carla-common/server/docker-compose.yml" up -d --build
+```
+
+### Arguments and Config File
 The `client/train.py` (or `/app/train.py` inside the container) script uses both arguments and a configuration file. The configuration file specifies all components of the model. The config file should have everything necessary to reproduce the results of a given model. The arguments of the script deal with things that are independent of the model (this includes things, like for example, ~~how often to create videos or~~ log to Tensorboard)
 
 ### Hyperparameter Tuning

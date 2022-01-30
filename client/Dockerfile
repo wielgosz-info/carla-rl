@@ -1,5 +1,5 @@
 ARG PLATFORM=nvidia
-FROM wielgoszinfo/pedestrians-common:${PLATFORM}-latest AS base
+FROM wielgoszinfo/carla-common:${PLATFORM}-latest AS base
 
 ENV torch_version=1.9.1
 ENV torchvision_version=0.10.1
@@ -27,15 +27,6 @@ RUN /venv/bin/python -m pip install --no-cache-dir -f https://download.pytorch.o
 # -------------------------------------------------------------------------------------------------
 FROM torch-${PLATFORM} as torch
 
-# Copy the 'agents' package used by scenario runner. It is a part of provided PythonAPI, but not a part of carla package.
-COPY --from=carlasim/carla:0.9.13 --chown=${USERNAME}:${USERNAME} /home/carla/PythonAPI/carla/agents /venv/lib/python3.8/site-packages/agents
-
-# Install direct dependencies and scenario_runner ones
-RUN /venv/bin/python -m pip install --no-cache-dir \
-    carla==0.9.13
-
 # Add requirements.txt first for caching purposes.
 COPY requirements.txt /app
 RUN /venv/bin/python -m pip install -r /app/requirements.txt  --no-cache-dir
-
-ENTRYPOINT [ "/bin/sh", "-c", "while sleep 1000; do :; done" ]
